@@ -1,61 +1,81 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Photo Gallery</title>
+    <title>Family Gallery</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; display: flex; flex-direction: column; min-height: 100vh; }
-        header { background: #16213e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        header { background: #16213e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; position: sticky; top: 0; z-index: 100; }
         header a { color: #4a90d9; text-decoration: none; margin-left: 1rem; font-size: 14px; }
         .main { display: flex; flex: 1; }
-        .sidebar { width: 240px; min-width: 240px; background: #16213e; padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1.2rem; }
-        .sidebar h3 { color: #4a90d9; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-        .sidebar label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ccc; cursor: pointer; margin-bottom: 6px; }
-        .sidebar input[type=checkbox] { accent-color: #4a90d9; width: 16px; height: 16px; }
-        .sidebar input[type=date], .sidebar input[type=text], .sidebar select { width: 100%; padding: 7px 10px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; font-size: 13px; }
-        .sidebar button { width: 100%; padding: 8px; background: #4a90d9; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 14px; }
-        .sidebar .clear-btn { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; margin-top: 4px; }
-        .content { flex: 1; padding: 16px; }
-        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
-        .count { color: #aaa; font-size: 14px; }
-        .sort-btns { display: flex; gap: 6px; }
-        .sort-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid #4a90d9; background: transparent; color: #4a90d9; cursor: pointer; font-size: 12px; text-decoration: none; }
-        .sort-btn.active { background: #4a90d9; color: white; }
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        .sidebar { width: 220px; min-width: 220px; background: #16213e; padding: 1.2rem 1rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; max-height: calc(100vh - 60px); position: sticky; top: 60px; }
+        .sidebar h3 { color: #4a90d9; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .sidebar label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ccc; cursor: pointer; margin-bottom: 5px; }
+        .sidebar input[type=checkbox] { accent-color: #4a90d9; }
+        .sidebar input[type=date], .sidebar input[type=text], .sidebar select { width: 100%; padding: 6px 8px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; font-size: 12px; }
+        .sidebar button { width: 100%; padding: 7px; background: #4a90d9; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; }
+        .sidebar .clear-btn { display: block; text-align: center; padding: 7px; border-radius: 6px; border: 1px solid #4a90d9; color: #4a90d9; text-decoration: none; font-size: 13px; }
+        .content { flex: 1; padding: 14px; overflow: hidden; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+        .topbar-left { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .count { color: #aaa; font-size: 13px; }
+        .sort-btns { display: flex; gap: 5px; }
+        .sort-btn, .filter-btn { padding: 4px 10px; border-radius: 20px; border: 1px solid #4a90d9; background: transparent; color: #4a90d9; cursor: pointer; font-size: 11px; text-decoration: none; }
+        .sort-btn.active, .filter-btn.active { background: #4a90d9; color: white; }
+        .fav-btn-top { border-color: #f39c12; color: #f39c12; }
+        .fav-btn-top.active { background: #f39c12; color: white; }
+        .zip-btn { padding: 4px 10px; border-radius: 20px; border: 1px solid #2ecc71; background: transparent; color: #2ecc71; cursor: pointer; font-size: 11px; text-decoration: none; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
         .photo-card { position: relative; background: #16213e; border-radius: 8px; overflow: hidden; }
-        .photo-card img { width: 100%; height: 160px; object-fit: cover; display: block; cursor: pointer; }
-        .photo-info { padding: 6px 8px 8px; }
-        .photo-info .fname { font-size: 11px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .photo-info .date { font-size: 10px; color: #666; margin-top: 2px; }
-        .photo-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
-        .tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #0f3460; color: #4a90d9; }
+        .photo-card .thumb-wrap { position: relative; }
+        .photo-card img { width: 100%; height: 150px; object-fit: cover; display: block; cursor: pointer; }
+        .video-thumb { width: 100%; height: 150px; background: #0f3460; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; gap: 6px; }
+        .video-thumb span { font-size: 2.5rem; }
+        .video-thumb p { font-size: 11px; color: #aaa; }
+        .video-badge { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; }
+        .photo-info { padding: 5px 7px 5px; }
+        .photo-info .fname { font-size: 10px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .photo-info .date { font-size: 10px; color: #555; margin-top: 1px; }
+        .photo-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
+        .tag { font-size: 9px; padding: 1px 5px; border-radius: 8px; background: #0f3460; color: #4a90d9; }
         .tag.place { background: #1a3a1a; color: #4caf50; }
-        .photo-actions { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px; }
-        .fav-btn { background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; }
+        .photo-actions { display: flex; justify-content: space-between; align-items: center; padding: 3px 7px 6px; }
+        .fav-btn { background: none; border: none; cursor: pointer; font-size: 16px; }
         .tag-btn { font-size: 11px; color: #4a90d9; background: none; border: none; cursor: pointer; }
-        .del-btn { background: rgba(220,50,50,0.8); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px; text-align: center; }
+        .dl-btn { font-size: 11px; color: #2ecc71; background: none; border: none; cursor: pointer; text-decoration: none; }
+        .del-btn { background: rgba(220,50,50,0.8); border: none; color: white; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 22px; text-align: center; }
         .empty { text-align: center; padding: 4rem; color: #aaa; grid-column: 1/-1; }
-        /* Tag modal */
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
         .modal.active { display: flex; }
-        .modal-box { background: #16213e; border-radius: 12px; padding: 2rem; width: 340px; max-width: 90vw; }
-        .modal-box h3 { margin-bottom: 1rem; color: white; }
-        .modal-box label { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; margin-bottom: 8px; cursor: pointer; }
+        .modal-box { background: #16213e; border-radius: 12px; padding: 1.5rem; width: 320px; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
+        .modal-box h3 { margin-bottom: 1rem; }
+        .modal-box label { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 13px; margin-bottom: 7px; cursor: pointer; }
         .modal-box input[type=checkbox] { accent-color: #4a90d9; }
-        .modal-box input[type=text] { width: 100%; padding: 8px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; margin-top: 8px; margin-bottom: 12px; }
+        .modal-box input[type=text], .modal-box select { width: 100%; padding: 7px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; margin-top: 6px; margin-bottom: 10px; font-size: 13px; }
         .modal-actions { display: flex; gap: 8px; }
         .modal-actions button { flex: 1; padding: 8px; border-radius: 6px; border: none; cursor: pointer; }
         .modal-save { background: #4a90d9; color: white; }
         .modal-cancel { background: #333; color: white; }
         /* Lightbox */
-        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 999; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
+        .lightbox { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; flex-direction: column; }
         .lightbox.active { display: flex; }
-        .lightbox img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 6px; }
-        .lightbox-name { color: #aaa; font-size: 13px; }
-        .lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; cursor: pointer; color: white; }
-        .fav-filter-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid #f39c12; background: transparent; color: #f39c12; cursor: pointer; font-size: 12px; text-decoration: none; }
-        .fav-filter-btn.active { background: #f39c12; color: white; }
+        .lb-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: rgba(0,0,0,0.7); }
+        .lb-title { color: #aaa; font-size: 13px; }
+        .lb-controls { display: flex; gap: 12px; align-items: center; }
+        .lb-btn { background: none; border: 1px solid #555; color: white; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .lb-btn.active { background: #4a90d9; border-color: #4a90d9; }
+        .lb-speed { background: #0f3460; border: 1px solid #1a4a80; color: white; padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+        .lb-close { background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; line-height: 1; }
+        .lb-main { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        .lb-main img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .lb-main video { max-width: 100%; max-height: 100%; }
+        .lb-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); border: none; color: white; font-size: 2rem; padding: 1rem 0.8rem; cursor: pointer; border-radius: 6px; }
+        .lb-arrow:hover { background: rgba(255,255,255,0.2); }
+        .lb-prev { left: 10px; }
+        .lb-next { right: 10px; }
+        .lb-footer { padding: 8px 20px; background: rgba(0,0,0,0.7); display: flex; justify-content: center; }
+        .lb-counter { color: #666; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -63,14 +83,14 @@
     <span>📷 Family Gallery</span>
     <div>
         <a href="/upload">📤 Upload</a>
+        <a href="/albums">🗂️ Albums</a>
         {% if current_user.is_admin %}<a href="/admin/users">👥 Users</a>{% endif %}
-        <a href="/change-password">🔒 Password</a>
+        <a href="/change-password">🔒</a>
         <a href="/logout">Logout ({{ current_user.username }})</a>
     </div>
 </header>
 
 <div class="main">
-    <!-- Sidebar filters -->
     <form class="sidebar" method="GET" action="/">
         <div>
             <h3>👤 People</h3>
@@ -84,64 +104,90 @@
         </div>
         <div>
             <h3>📍 Place</h3>
-            <input type="text" name="place" placeholder="Search place..." value="{{ selected_place }}">
+            <input type="text" name="place" placeholder="Search..." value="{{ selected_place }}">
         </div>
         <div>
             <h3>📅 Date Range</h3>
             <input type="date" name="date_from" value="{{ date_from }}">
-            <div style="color:#666;font-size:11px;text-align:center;margin:4px 0">to</div>
+            <div style="color:#555;font-size:10px;text-align:center;margin:3px 0">to</div>
             <input type="date" name="date_to" value="{{ date_to }}">
         </div>
+        <div>
+            <h3>🗂️ Album</h3>
+            <select name="album_id">
+                <option value="">All albums</option>
+                {% for album in albums %}
+                <option value="{{ album.id }}" {% if selected_album == album.id|string %}selected{% endif %}>
+                    {{ album.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <h3>🎬 Media</h3>
+            <select name="media_filter">
+                <option value="all" {% if media_filter == 'all' %}selected{% endif %}>All</option>
+                <option value="photos" {% if media_filter == 'photos' %}selected{% endif %}>Photos only</option>
+                <option value="videos" {% if media_filter == 'videos' %}selected{% endif %}>Videos only</option>
+            </select>
+        </div>
         <input type="hidden" name="sort" value="{{ sort }}">
-        <button type="submit">Apply Filters</button>
-        <a href="/" class="sidebar clear-btn" style="display:block;text-align:center;padding:8px;border-radius:6px;border:1px solid #4a90d9;color:#4a90d9;text-decoration:none;font-size:14px;">Clear</a>
+        <button type="submit">Apply</button>
+        <a href="/" class="clear-btn">Clear</a>
     </form>
 
-    <!-- Main content -->
     <div class="content">
         <div class="topbar">
-            <div style="display:flex;gap:8px;align-items:center;">
-                <span class="count">{{ photos|length }} photos</span>
-                <a href="/?favorites=1&sort={{ sort }}" class="fav-filter-btn {% if favorites_only %}active{% endif %}">❤️ Favorites</a>
+            <div class="topbar-left">
+                <span class="count">{{ photos|length }} items</span>
+                <a href="/?favorites=1&sort={{ sort }}" class="filter-btn fav-btn-top {% if favorites_only %}active{% endif %}">❤️ Favs</a>
+                <a href="/download-zip?sort={{ sort }}{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_album %}&album_id={{ selected_album }}{% endif %}&media_filter={{ media_filter }}" class="zip-btn">⬇️ ZIP</a>
             </div>
             <div class="sort-btns">
-                <a href="?sort=newest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'newest' %}active{% endif %}">Newest</a>
-                <a href="?sort=oldest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'oldest' %}active{% endif %}">Oldest</a>
-                <a href="?sort=name{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'name' %}active{% endif %}">Name</a>
+                <a href="?sort=newest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_album %}&album_id={{ selected_album }}{% endif %}&media_filter={{ media_filter }}" class="sort-btn {% if sort == 'newest' %}active{% endif %}">Newest</a>
+                <a href="?sort=oldest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_album %}&album_id={{ selected_album }}{% endif %}&media_filter={{ media_filter }}" class="sort-btn {% if sort == 'oldest' %}active{% endif %}">Oldest</a>
+                <a href="?sort=name{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_album %}&album_id={{ selected_album }}{% endif %}&media_filter={{ media_filter }}" class="sort-btn {% if sort == 'name' %}active{% endif %}">Name</a>
             </div>
         </div>
 
-        <div class="gallery">
+        <div class="gallery" id="gallery">
             {% if photos %}
                 {% for p in photos %}
-                <div class="photo-card">
-                    <img src="/photo?path={{ p.path | urlencode }}"
-                         alt="{{ p.filename }}"
-                         onclick="openLightbox('/photo?path={{ p.path | urlencode }}', '{{ p.filename }}')">
+                <div class="photo-card" data-index="{{ loop.index0 }}"
+                     data-path="{{ p.path | urlencode }}"
+                     data-type="{{ p.media_type }}"
+                     data-name="{{ p.filename }}">
+                    <div class="thumb-wrap">
+                        {% if p.media_type == 'video' %}
+                        <div class="video-thumb" onclick="openLightbox({{ loop.index0 }})">
+                            <span>🎬</span>
+                            <p>{{ p.filename }}</p>
+                        </div>
+                        {% else %}
+                        <img src="/thumb?path={{ p.path | urlencode }}"
+                             alt="{{ p.filename }}"
+                             onclick="openLightbox({{ loop.index0 }})"
+                             loading="lazy">
+                        {% endif %}
+                        {% if p.media_type == 'video' %}
+                        <span class="video-badge">▶ Video</span>
+                        {% endif %}
+                    </div>
                     <div class="photo-info">
                         <div class="fname">{{ p.filename }}</div>
                         <div class="date">{{ p.ctime | int | datetimeformat }}</div>
                         <div class="photo-tags">
-                            {% if p.people_tags %}
-                                {% for person in p.people_tags.split(',') %}
-                                <span class="tag">{{ person }}</span>
-                                {% endfor %}
-                            {% endif %}
-                            {% if p.place_tags %}
-                                {% for place in p.place_tags.split(',') %}
-                                <span class="tag place">📍{{ place }}</span>
-                                {% endfor %}
-                            {% endif %}
+                            {% if p.people_tags %}{% for person in p.people_tags.split(',') %}<span class="tag">{{ person }}</span>{% endfor %}{% endif %}
+                            {% if p.place_tags %}{% for place in p.place_tags.split(',') %}<span class="tag place">📍{{ place }}</span>{% endfor %}{% endif %}
                         </div>
                     </div>
                     <div class="photo-actions">
-                        <button class="fav-btn" onclick="toggleFav({{ p.id }}, this)" title="Favorite">
-                            {{ '❤️' if p.is_favorite else '🤍' }}
-                        </button>
-                        <button class="tag-btn" onclick="openTagModal({{ p.id }}, '{{ p.people_tags or '' }}', '{{ p.place_tags.split(',')[0] if p.place_tags else '' }}')">🏷️ Tag</button>
-                        {% if current_user.is_admin %}
-                        <form method="POST" action="/delete/{{ p.id }}" onsubmit="return confirm('Delete {{ p.filename }}?')" style="display:inline">
-                            <button class="del-btn" type="submit">✕</button>
+                        <button class="fav-btn" onclick="toggleFav({{ p.id }}, this)">{{ '❤️' if p.is_favorite else '🤍' }}</button>
+                        <button class="tag-btn" onclick="openTagModal({{ p.id }}, '{{ p.people_tags or '' }}', '{{ p.place_tags.split(',')[0] if p.place_tags else '' }}')">🏷️</button>
+                        <a class="dl-btn" href="/download?path={{ p.path | urlencode }}">⬇️</a>
+                        {% if current_user.is_admin or p.uploaded_by == current_user.username %}
+                        <form method="POST" action="/delete/{{ p.id }}" onsubmit="return confirm('Delete?')" style="display:inline">
+                            <button class="del-btn">✕</button>
                         </form>
                         {% endif %}
                     </div>
@@ -160,11 +206,9 @@
         <h3>🏷️ Tag Photo</h3>
         <form method="POST" id="tagForm">
             {% for person in people_list %}
-            <label>
-                <input type="checkbox" name="people" value="{{ person }}" class="person-check"> {{ person }}
-            </label>
+            <label><input type="checkbox" name="people" value="{{ person }}" class="person-check"> {{ person }}</label>
             {% endfor %}
-            <input type="text" name="place" id="placeInput" placeholder="Place (city, region, vacation...)">
+            <input type="text" name="place" id="placeInput" placeholder="Place...">
             <div class="modal-actions">
                 <button type="submit" class="modal-save">Save</button>
                 <button type="button" class="modal-cancel" onclick="closeTagModal()">Cancel</button>
@@ -173,36 +217,137 @@
     </div>
 </div>
 
-<!-- Lightbox -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-    <span class="lightbox-close">✕</span>
-    <img id="lightbox-img" src="">
-    <div class="lightbox-name" id="lightbox-name"></div>
+<!-- Lightbox / Slideshow -->
+<div class="lightbox" id="lightbox">
+    <div class="lb-header">
+        <span class="lb-title" id="lbTitle"></span>
+        <div class="lb-controls">
+            <button class="lb-btn" id="slideshowBtn" onclick="toggleSlideshow()">▶ Slideshow</button>
+            <select class="lb-speed" id="speedSelect" onchange="updateSpeed()">
+                <option value="2000">2s</option>
+                <option value="3000" selected>3s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+            </select>
+            <button class="lb-btn" onclick="downloadCurrent()">⬇️</button>
+            <button class="lb-close" onclick="closeLightbox()">✕</button>
+        </div>
+    </div>
+    <div class="lb-main">
+        <button class="lb-arrow lb-prev" onclick="navigate(-1)">‹</button>
+        <img id="lbImg" src="" style="display:none">
+        <video id="lbVideo" controls style="display:none"></video>
+        <button class="lb-arrow lb-next" onclick="navigate(1)">›</button>
+    </div>
+    <div class="lb-footer">
+        <span class="lb-counter" id="lbCounter"></span>
+    </div>
 </div>
 
 <script>
-function openLightbox(src, name) {
-    document.getElementById('lightbox-img').src = src;
-    document.getElementById('lightbox-name').textContent = name;
+// Build media list from gallery
+const cards = Array.from(document.querySelectorAll('.photo-card'));
+const mediaList = cards.map(c => ({
+    path: c.dataset.path,
+    type: c.dataset.type,
+    name: c.dataset.name
+}));
+
+let currentIndex = 0;
+let slideshowTimer = null;
+let slideshowSpeed = 3000;
+
+function openLightbox(index) {
+    currentIndex = index;
     document.getElementById('lightbox').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    showMedia(currentIndex);
 }
+
 function closeLightbox() {
+    stopSlideshow();
     document.getElementById('lightbox').classList.remove('active');
+    document.body.style.overflow = '';
+    document.getElementById('lbVideo').pause();
+    document.getElementById('lbVideo').src = '';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeLightbox(); closeTagModal(); } });
+
+function showMedia(index) {
+    const item = mediaList[index];
+    const img = document.getElementById('lbImg');
+    const video = document.getElementById('lbVideo');
+    document.getElementById('lbTitle').textContent = item.name;
+    document.getElementById('lbCounter').textContent = `${index + 1} / ${mediaList.length}`;
+
+    if (item.type === 'video') {
+        img.style.display = 'none';
+        video.style.display = 'block';
+        video.src = '/photo?path=' + item.path;
+        video.load();
+    } else {
+        video.pause();
+        video.style.display = 'none';
+        img.style.display = 'block';
+        img.src = '/photo?path=' + item.path;
+    }
+}
+
+function navigate(dir) {
+    currentIndex = (currentIndex + dir + mediaList.length) % mediaList.length;
+    showMedia(currentIndex);
+}
+
+function toggleSlideshow() {
+    if (slideshowTimer) {
+        stopSlideshow();
+    } else {
+        startSlideshow();
+    }
+}
+
+function startSlideshow() {
+    const btn = document.getElementById('slideshowBtn');
+    btn.textContent = '⏸ Pause';
+    btn.classList.add('active');
+    slideshowTimer = setInterval(() => navigate(1), slideshowSpeed);
+}
+
+function stopSlideshow() {
+    clearInterval(slideshowTimer);
+    slideshowTimer = null;
+    const btn = document.getElementById('slideshowBtn');
+    btn.textContent = '▶ Slideshow';
+    btn.classList.remove('active');
+}
+
+function updateSpeed() {
+    slideshowSpeed = parseInt(document.getElementById('speedSelect').value);
+    if (slideshowTimer) { stopSlideshow(); startSlideshow(); }
+}
+
+function downloadCurrent() {
+    window.location = '/download?path=' + mediaList[currentIndex].path;
+}
+
+document.addEventListener('keydown', e => {
+    if (!document.getElementById('lightbox').classList.contains('active')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') navigate(1);
+    if (e.key === 'ArrowLeft') navigate(-1);
+    if (e.key === ' ') { e.preventDefault(); toggleSlideshow(); }
+});
 
 function openTagModal(photoId, peopleTags, placeTag) {
     const form = document.getElementById('tagForm');
     form.action = '/tag/' + photoId;
     document.querySelectorAll('.person-check').forEach(cb => {
-        cb.checked = peopleTags ? peopleTags.split(',').map(s=>s.trim()).includes(cb.value) : false;
+        cb.checked = peopleTags ? peopleTags.split(',').map(s => s.trim()).includes(cb.value) : false;
     });
     document.getElementById('placeInput').value = placeTag || '';
     document.getElementById('tagModal').classList.add('active');
 }
-function closeTagModal() {
-    document.getElementById('tagModal').classList.remove('active');
-}
+
+function closeTagModal() { document.getElementById('tagModal').classList.remove('active'); }
 
 function toggleFav(photoId, btn) {
     fetch('/favorite/' + photoId, { method: 'POST' })

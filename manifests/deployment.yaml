@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: photo-gallery
-          image: docker.io/library/photo-gallery:v4
+          image: docker.io/library/photo-gallery:v5
           imagePullPolicy: Never
           ports:
             - containerPort: 5000
@@ -28,7 +28,9 @@ spec:
               mountPath: /photos/random
             - name: data
               mountPath: /data
-      volumes:
+            - name: thumbnails
+              mountPath: /photos/thumbnails
+          volumes:
         - name: photos-holidays
           hostPath:
             path: /mnt/d/photos/holidays
@@ -44,4 +46,8 @@ spec:
         - name: data
           hostPath:
             path: /mnt/d/photos/data
+            type: DirectoryOrCreate
+        - name: thumbnails
+          hostPath:
+            path: /mnt/d/photos/thumbnails
             type: DirectoryOrCreate

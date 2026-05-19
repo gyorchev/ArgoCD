@@ -3,13 +3,17 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-import os, sqlite3, yaml
+from PIL import Image
 from pathlib import Path
+import os, sqlite3, yaml, io, zipfile
 
 app = Flask(__name__)
 app.secret_key = 'change-this-secret-key'
 CONFIG_PATH = '/app/config.yaml'
-ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+PHOTO_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv'}
+ALL_EXTENSIONS = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
+THUMB_SIZE = (400, 400)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -21,10 +25,12 @@ def load_config():
 def get_db():
     conn = sqlite3.connect('/data/users.db')
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 def init_db():
     os.makedirs('/data', exist_ok=True)
+    os.makedirs('/photos/thumbnails', exist_ok=True)
     conn = get_db()
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS users (
@@ -38,7 +44,8 @@ def init_db():
             path TEXT UNIQUE,
             filename TEXT,
             ctime REAL,
-            uploaded_by TEXT
+            uploaded_by TEXT,
+            media_type TEXT DEFAULT 'photo'
         );
         CREATE TABLE IF NOT EXISTS photo_people (
             photo_id INTEGER,
@@ -58,12 +65,49 @@ def init_db():
             PRIMARY KEY (photo_id, user_id),
             FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS albums (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_by TEXT,
+            created_at REAL
+        );
+        CREATE TABLE IF NOT EXISTS album_photos (
+            album_id INTEGER,
+            photo_id INTEGER,
+            PRIMARY KEY (album_id, photo_id),
+            FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
+            FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
+        );
     ''')
     if not conn.execute('SELECT * FROM users WHERE username = "grisho"').fetchone():
         conn.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)',
                      ('grisho', generate_password_hash('admin123'), 1))
     conn.commit()
     conn.close()
+
+def get_thumbnail_path(photo_path):
+    p = Path(photo_path)
+    thumb_dir = Path('/photos/thumbnails')
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    return thumb_dir / f"{p.stem}_{abs(hash(photo_path))}.jpg"
+
+def generate_thumbnail(photo_path):
+    thumb_path = get_thumbnail_path(photo_path)
+    if thumb_path.exists():
+        return str(thumb_path)
+    ext = Path(photo_path).suffix.lower()
+    if ext in VIDEO_EXTENSIONS:
+        return None  # video icon used instead
+    try:
+        with Image.open(photo_path) as img:
+            img.thumbnail(THUMB_SIZE)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            img.save(str(thumb_path), 'JPEG', quality=75)
+        return str(thumb_path)
+    except Exception:
+        return None
 
 def sync_photos():
     cfg = load_config()
@@ -73,17 +117,20 @@ def sync_photos():
         if not os.path.isdir(source):
             continue
         for f in Path(source).iterdir():
-            if f.suffix.lower() in ALLOWED_EXTENSIONS:
+            ext = f.suffix.lower()
+            if ext in ALL_EXTENSIONS:
+                media_type = 'video' if ext in VIDEO_EXTENSIONS else 'photo'
                 stat = f.stat()
-                conn.execute('''INSERT OR IGNORE INTO photos (path, filename, ctime, uploaded_by)
-                                VALUES (?, ?, ?, ?)''',
-                             (str(f), f.name, stat.st_ctime, 'system'))
+                conn.execute('''INSERT OR IGNORE INTO photos (path, filename, ctime, uploaded_by, media_type)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             (str(f), f.name, stat.st_ctime, 'system', media_type))
     conn.commit()
     conn.close()
 
-def get_photos(sort='newest', people=None, place=None, date_from=None, date_to=None, favorites_only=False):
+def get_photos(sort='newest', people=None, place=None, date_from=None,
+               date_to=None, favorites_only=False, album_id=None, media_filter='all'):
     conn = get_db()
-    query = '''SELECT DISTINCT p.*, 
+    query = '''SELECT DISTINCT p.*,
                GROUP_CONCAT(DISTINCT pp.person) as people_tags,
                GROUP_CONCAT(DISTINCT pl.place) as place_tags,
                EXISTS(SELECT 1 FROM favorites f WHERE f.photo_id = p.id AND f.user_id = ?) as is_favorite
@@ -91,6 +138,7 @@ def get_photos(sort='newest', people=None, place=None, date_from=None, date_to=N
                LEFT JOIN photo_people pp ON pp.photo_id = p.id
                LEFT JOIN photo_places pl ON pl.photo_id = p.id
                LEFT JOIN favorites fv ON fv.photo_id = p.id
+               LEFT JOIN album_photos ap ON ap.photo_id = p.id
                WHERE 1=1'''
     params = [current_user.id]
 
@@ -98,8 +146,7 @@ def get_photos(sort='newest', people=None, place=None, date_from=None, date_to=N
         placeholders = ','.join(['?' for _ in people])
         query += f''' AND p.id IN (
             SELECT photo_id FROM photo_people WHERE person IN ({placeholders})
-            GROUP BY photo_id HAVING COUNT(DISTINCT person) = ?
-        )'''
+            GROUP BY photo_id HAVING COUNT(DISTINCT person) = ?)'''
         params.extend(people)
         params.append(len(people))
 
@@ -118,6 +165,15 @@ def get_photos(sort='newest', people=None, place=None, date_from=None, date_to=N
     if favorites_only:
         query += ' AND fv.user_id = ?'
         params.append(current_user.id)
+
+    if album_id:
+        query += ' AND ap.album_id = ?'
+        params.append(album_id)
+
+    if media_filter == 'photos':
+        query += " AND p.media_type = 'photo'"
+    elif media_filter == 'videos':
+        query += " AND p.media_type = 'video'"
 
     query += ' GROUP BY p.id'
 
@@ -150,6 +206,13 @@ def load_user(user_id):
 def datetimeformat(value):
     return datetime.fromtimestamp(value).strftime('%d %b %Y')
 
+def is_allowed_source(path):
+    cfg = load_config()
+    sources = cfg.get('photo_sources', [])
+    upload_root = cfg.get('upload_root', '/photos/uploads')
+    all_roots = sources + [upload_root, '/photos/thumbnails']
+    return any(path.startswith(s) for s in all_roots)
+
 @app.route('/')
 @login_required
 def index():
@@ -160,31 +223,83 @@ def index():
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
     favorites_only = request.args.get('favorites') == '1'
+    album_id = request.args.get('album_id', '')
+    media_filter = request.args.get('media_filter', 'all')
     cfg = load_config()
 
     photos = get_photos(sort, people or None, place or None,
-                        date_from or None, date_to or None, favorites_only)
+                        date_from or None, date_to or None,
+                        favorites_only, int(album_id) if album_id else None,
+                        media_filter)
 
-    # Get all unique places for filter dropdown
     conn = get_db()
-    places = [r[0] for r in conn.execute('SELECT DISTINCT place FROM photo_places ORDER BY place').fetchall()]
+    places = [r[0] for r in conn.execute(
+        'SELECT DISTINCT place FROM photo_places ORDER BY place').fetchall()]
+    albums = conn.execute('SELECT * FROM albums ORDER BY created_at DESC').fetchall()
     conn.close()
 
     return render_template('index.html', photos=photos, sort=sort,
                            people_list=cfg['people'], places=places,
                            selected_people=people, selected_place=place,
                            date_from=date_from, date_to=date_to,
-                           favorites_only=favorites_only)
+                           favorites_only=favorites_only, albums=albums,
+                           selected_album=album_id, media_filter=media_filter)
+
+@app.route('/thumb')
+@login_required
+def thumb():
+    path = request.args.get('path')
+    if not is_allowed_source(path):
+        return 'Forbidden', 403
+    ext = Path(path).suffix.lower()
+    if ext in VIDEO_EXTENSIONS:
+        return 'No thumbnail', 404
+    thumb_path = generate_thumbnail(path)
+    if thumb_path:
+        return send_file(thumb_path, mimetype='image/jpeg')
+    return send_file(path)
 
 @app.route('/photo')
 @login_required
 def photo():
     path = request.args.get('path')
-    cfg = load_config()
-    sources = cfg.get('photo_sources', []) + [cfg.get('upload_root', '')]
-    if not any(path.startswith(s) for s in sources):
+    if not is_allowed_source(path):
         return 'Forbidden', 403
     return send_file(path)
+
+@app.route('/download')
+@login_required
+def download():
+    path = request.args.get('path')
+    if not is_allowed_source(path):
+        return 'Forbidden', 403
+    return send_file(path, as_attachment=True)
+
+@app.route('/download-zip')
+@login_required
+def download_zip():
+    sort = request.args.get('sort', 'newest')
+    people = request.args.getlist('people')
+    place = request.args.get('place', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    favorites_only = request.args.get('favorites') == '1'
+    album_id = request.args.get('album_id', '')
+    media_filter = request.args.get('media_filter', 'all')
+
+    photos = get_photos(sort, people or None, place or None,
+                        date_from or None, date_to or None,
+                        favorites_only, int(album_id) if album_id else None,
+                        media_filter)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for p in photos:
+            if os.path.exists(p['path']):
+                zf.write(p['path'], p['filename'])
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip',
+                     as_attachment=True, download_name='gallery.zip')
 
 @app.route('/tag/<int:photo_id>', methods=['POST'])
 @login_required
@@ -195,9 +310,11 @@ def tag_photo(photo_id):
     conn.execute('DELETE FROM photo_people WHERE photo_id = ?', (photo_id,))
     conn.execute('DELETE FROM photo_places WHERE photo_id = ?', (photo_id,))
     for person in people:
-        conn.execute('INSERT OR IGNORE INTO photo_people (photo_id, person) VALUES (?, ?)', (photo_id, person))
+        conn.execute('INSERT OR IGNORE INTO photo_people (photo_id, person) VALUES (?, ?)',
+                     (photo_id, person))
     if place:
-        conn.execute('INSERT OR IGNORE INTO photo_places (photo_id, place) VALUES (?, ?)', (photo_id, place))
+        conn.execute('INSERT OR IGNORE INTO photo_places (photo_id, place) VALUES (?, ?)',
+                     (photo_id, place))
     conn.commit()
     conn.close()
     return redirect(request.referrer or url_for('index'))
@@ -221,17 +338,71 @@ def toggle_favorite(photo_id):
 @app.route('/delete/<int:photo_id>', methods=['POST'])
 @login_required
 def delete(photo_id):
-    if not current_user.is_admin:
-        flash('Permission denied')
-        return redirect(url_for('index'))
     conn = get_db()
     photo = conn.execute('SELECT * FROM photos WHERE id = ?', (photo_id,)).fetchone()
-    if photo and os.path.exists(photo['path']):
+    if not photo:
+        return redirect(url_for('index'))
+    if not current_user.is_admin and photo['uploaded_by'] != current_user.username:
+        flash('Permission denied')
+        return redirect(url_for('index'))
+    if os.path.exists(photo['path']):
         os.remove(photo['path'])
+    thumb = get_thumbnail_path(photo['path'])
+    if thumb.exists():
+        thumb.unlink()
     conn.execute('DELETE FROM photos WHERE id = ?', (photo_id,))
     conn.commit()
     conn.close()
     return redirect(request.referrer or url_for('index'))
+
+@app.route('/albums', methods=['GET', 'POST'])
+@login_required
+def albums():
+    conn = get_db()
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'create':
+            name = request.form.get('name', '').strip()
+            desc = request.form.get('description', '').strip()
+            if name:
+                conn.execute('INSERT INTO albums (name, description, created_by, created_at) VALUES (?, ?, ?, ?)',
+                             (name, desc, current_user.username, datetime.now().timestamp()))
+                conn.commit()
+                flash('Album created')
+        elif action == 'delete':
+            album_id = request.form.get('album_id')
+            album = conn.execute('SELECT * FROM albums WHERE id = ?', (album_id,)).fetchone()
+            if album and (current_user.is_admin or album['created_by'] == current_user.username):
+                conn.execute('DELETE FROM albums WHERE id = ?', (album_id,))
+                conn.commit()
+                flash('Album deleted')
+    all_albums = conn.execute(
+        'SELECT a.*, COUNT(ap.photo_id) as photo_count FROM albums a LEFT JOIN album_photos ap ON ap.album_id = a.id GROUP BY a.id ORDER BY a.created_at DESC'
+    ).fetchall()
+    conn.close()
+    return render_template('albums.html', albums=all_albums)
+
+@app.route('/album/<int:album_id>/add', methods=['POST'])
+@login_required
+def add_to_album(album_id):
+    photo_id = request.form.get('photo_id')
+    conn = get_db()
+    conn.execute('INSERT OR IGNORE INTO album_photos (album_id, photo_id) VALUES (?, ?)',
+                 (album_id, photo_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/album/<int:album_id>/remove', methods=['POST'])
+@login_required
+def remove_from_album(album_id):
+    photo_id = request.form.get('photo_id')
+    conn = get_db()
+    conn.execute('DELETE FROM album_photos WHERE album_id = ? AND photo_id = ?',
+                 (album_id, photo_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
 
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
@@ -245,17 +416,27 @@ def upload():
         files = request.files.getlist('photos')
         uploaded = 0
         for file in files:
-            if file and Path(file.filename).suffix.lower() in ALLOWED_EXTENSIONS:
+            if file and Path(file.filename).suffix.lower() in ALL_EXTENSIONS:
                 filename = secure_filename(file.filename)
                 dest = os.path.join(user_folder, filename)
-                # Avoid overwriting
                 if os.path.exists(dest):
                     base, ext = os.path.splitext(filename)
                     filename = f"{base}_{int(datetime.now().timestamp())}{ext}"
                     dest = os.path.join(user_folder, filename)
                 file.save(dest)
+                ext = Path(dest).suffix.lower()
+                media_type = 'video' if ext in VIDEO_EXTENSIONS else 'photo'
+                stat = Path(dest).stat()
+                conn = get_db()
+                conn.execute('''INSERT OR IGNORE INTO photos (path, filename, ctime, uploaded_by, media_type)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             (dest, filename, stat.st_ctime, current_user.username, media_type))
+                conn.commit()
+                conn.close()
+                if media_type == 'photo':
+                    generate_thumbnail(dest)
                 uploaded += 1
-        flash(f'{uploaded} photo(s) uploaded successfully')
+        flash(f'{uploaded} file(s) uploaded successfully')
         return redirect(url_for('upload'))
 
     return render_template('upload.html')
@@ -320,7 +501,8 @@ def manage_users():
             except:
                 flash('Username already exists')
         elif action == 'delete':
-            conn.execute('DELETE FROM users WHERE id = ? AND is_admin = 0', (request.form['user_id'],))
+            conn.execute('DELETE FROM users WHERE id = ? AND is_admin = 0',
+                         (request.form['user_id'],))
             conn.commit()
     users = conn.execute('SELECT * FROM users').fetchall()
     conn.close()
