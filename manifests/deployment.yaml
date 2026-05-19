@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-gallery
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: photo-gallery
+  template:
+    metadata:
+      labels:
+        app: photo-gallery
+    spec:
+      containers:
+        - name: photo-gallery
+          image: docker.io/library/photo-gallery:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: photos-holidays
+              mountPath: /photos/holidays
+            - name: photos-family
+              mountPath: /photos/family
+            - name: photos-random
+              mountPath: /photos/random
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: photos-holidays
+          hostPath:
+            path: /mnt/d/photos/holidays
+            type: DirectoryOrCreate
+        - name: photos-family
+          hostPath:
+            path: /mnt/d/photos/family
+            type: DirectoryOrCreate
+        - name: photos-random
+          hostPath:
+            path: /mnt/d/photos/random
+            type: DirectoryOrCreate
+        - name: data
+          hostPath:
+            path: /mnt/d/photos/data
+            type: DirectoryOrCreate

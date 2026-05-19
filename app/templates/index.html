@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Photo Gallery</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; }
+        header { background: #16213e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        header a { color: #4a90d9; text-decoration: none; margin-left: 1rem; }
+        .controls { padding: 12px 20px; background: #0f3460; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .controls span { color: #aaa; font-size: 14px; }
+        .sort-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid #4a90d9; background: transparent; color: #4a90d9; cursor: pointer; font-size: 13px; text-decoration: none; }
+        .sort-btn.active { background: #4a90d9; color: white; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 20px; }
+        .photo-card { position: relative; background: #16213e; border-radius: 8px; overflow: hidden; }
+        .photo-card img { width: 100%; height: 180px; object-fit: cover; display: block; cursor: pointer; }
+        .photo-info { padding: 6px 10px; }
+        .photo-info .name { font-size: 12px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .photo-info .date { font-size: 11px; color: #666; margin-top: 2px; }
+        .delete-btn { position: absolute; top: 6px; right: 6px; background: rgba(220,50,50,0.85); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 14px; line-height: 28px; }
+        .empty { text-align: center; padding: 4rem; color: #aaa; grid-column: 1/-1; }
+        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); justify-content: center; align-items: center; z-index: 999; flex-direction: column; gap: 10px; }
+        .lightbox.active { display: flex; }
+        .lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 8px; object-fit: contain; }
+        .lightbox-name { color: #aaa; font-size: 13px; }
+        .lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; cursor: pointer; color: white; }
+    </style>
+</head>
+<body>
+    <header>
+        <span>📷 Photo Gallery ({{ photos|length }} photos)</span>
+        <div>
+            {% if current_user.is_admin %}<a href="/admin/users">Manage Users</a>{% endif %}
+            <a href="/logout">Logout ({{ current_user.username }})</a>
+        </div>
+    </header>
+
+    <div class="controls">
+        <span>Sort by:</span>
+        <a href="/?sort=newest" class="sort-btn {% if sort == 'newest' %}active{% endif %}">Newest first</a>
+        <a href="/?sort=oldest" class="sort-btn {% if sort == 'oldest' %}active{% endif %}">Oldest first</a>
+        <a href="/?sort=name"   class="sort-btn {% if sort == 'name' %}active{% endif %}">Name A–Z</a>
+    </div>
+
+    <div class="gallery">
+        {% if photos %}
+            {% for p in photos %}
+            <div class="photo-card">
+                <img src="/photo?path={{ p.path | urlencode }}"
+                     alt="{{ p.filename }}"
+                     onclick="openLightbox('/photo?path={{ p.path | urlencode }}', '{{ p.filename }}')">
+                <div class="photo-info">
+                    <div class="name">{{ p.filename }}</div>
+                    <div class="date">{{ p.ctime | int | datetimeformat }}</div>
+                </div>
+                {% if current_user.is_admin %}
+                <form method="POST" action="/delete"
+                      onsubmit="return confirm('Delete {{ p.filename }}?')">
+                    <input type="hidden" name="path" value="{{ p.path }}">
+                    <input type="hidden" name="sort" value="{{ sort }}">
+                    <button class="delete-btn" type="submit">✕</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty">No photos found in configured sources.</div>
+        {% endif %}
+    </div>
+
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close">✕</span>
+        <img id="lightbox-img" src="">
+        <div class="lightbox-name" id="lightbox-name"></div>
+    </div>
+
+    <script>
+        function openLightbox(src, name) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('lightbox-name').textContent = name;
+            document.getElementById('lightbox').classList.add('active');
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+    </script>
+</body>
+</html>
