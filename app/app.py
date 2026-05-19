@@ -3,7 +3,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageOps
 from pathlib import Path
 import os, sqlite3, yaml, io, zipfile
 
@@ -98,9 +98,10 @@ def generate_thumbnail(photo_path):
         return str(thumb_path)
     ext = Path(photo_path).suffix.lower()
     if ext in VIDEO_EXTENSIONS:
-        return None  # video icon used instead
+        return None
     try:
         with Image.open(photo_path) as img:
+            img = ImageOps.exif_transpose(img)
             img.thumbnail(THUMB_SIZE)
             if img.mode in ('RGBA', 'P'):
                 img = img.convert('RGB')
@@ -247,28 +248,17 @@ def index():
 
 @app.route('/thumb')
 @login_required
-def generate_thumbnail(photo_path):
-    thumb_path = get_thumbnail_path(photo_path)
-    if thumb_path.exists():
-        return str(thumb_path)
-    ext = Path(photo_path).suffix.lower()
+def thumb():
+    path = request.args.get('path')
+    if not is_allowed_source(path):
+        return 'Forbidden', 403
+    ext = Path(path).suffix.lower()
     if ext in VIDEO_EXTENSIONS:
-        return None
-    try:
-        with Image.open(photo_path) as img:
-            # Apply EXIF rotation
-            try:
-                from PIL import ImageOps
-                img = ImageOps.exif_transpose(img)
-            except Exception:
-                pass
-            img.thumbnail(THUMB_SIZE)
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-            img.save(str(thumb_path), 'JPEG', quality=75)
-        return str(thumb_path)
-    except Exception:
-        return None
+        return 'No thumbnail', 404
+    thumb_path = generate_thumbnail(path)
+    if thumb_path:
+        return send_file(thumb_path, mimetype='image/jpeg')
+    return send_file(path)
 
 @app.route('/photo')
 @login_required
