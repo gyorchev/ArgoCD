@@ -2,3 +2,16 @@ photo_sources:
   - /photos/holidays
   - /photos/family
   - /photos/random
+  - /photos/uploads/grisho
+  - /photos/uploads/danielcheto
+  - /photos/uploads/stasi
+  - /photos/uploads/joro
+
+upload_root: /photos/uploads
+
+people:
+  - Grisho
+  - Danielcheto
+  - Stasi
+  - Joro
+  - Gordon

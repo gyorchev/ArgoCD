@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload Photos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; min-height: 100vh; }
+        header { background: #16213e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        header a { color: #4a90d9; text-decoration: none; font-size: 14px; }
+        .container { max-width: 600px; margin: 3rem auto; padding: 0 1rem; }
+        h2 { margin-bottom: 0.5rem; }
+        .subtitle { color: #aaa; font-size: 14px; margin-bottom: 2rem; }
+        .drop-zone { border: 2px dashed #4a90d9; border-radius: 12px; padding: 3rem 2rem; text-align: center; cursor: pointer; transition: background 0.2s; }
+        .drop-zone.drag-over { background: rgba(74,144,217,0.1); }
+        .drop-zone p { color: #aaa; margin-top: 0.5rem; font-size: 14px; }
+        .drop-zone .icon { font-size: 3rem; }
+        input[type=file] { display: none; }
+        .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-top: 1.5rem; }
+        .preview-item { position: relative; border-radius: 6px; overflow: hidden; }
+        .preview-item img { width: 100%; height: 90px; object-fit: cover; display: block; }
+        .preview-item .remove { position: absolute; top: 3px; right: 3px; background: rgba(220,50,50,0.85); border: none; color: white; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 11px; line-height: 20px; text-align: center; }
+        .upload-btn { width: 100%; margin-top: 1.5rem; padding: 12px; background: #4a90d9; border: none; border-radius: 8px; color: white; font-size: 16px; cursor: pointer; }
+        .upload-btn:disabled { background: #333; cursor: not-allowed; }
+        .flash { padding: 10px 16px; border-radius: 6px; margin-bottom: 1rem; font-size: 14px; background: rgba(46,204,113,0.2); color: #2ecc71; }
+        .progress { display: none; margin-top: 1rem; background: #0f3460; border-radius: 6px; height: 8px; overflow: hidden; }
+        .progress-bar { height: 100%; background: #4a90d9; width: 0%; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+<header>
+    <span>📤 Upload Photos</span>
+    <a href="/">← Back to Gallery</a>
+</header>
+<div class="container">
+    <h2>Upload Photos</h2>
+    <p class="subtitle">Your photos will be saved to your personal folder: <strong>/uploads/{{ current_user.username.lower() }}/</strong></p>
+
+    {% for msg in get_flashed_messages() %}
+    <div class="flash">{{ msg }}</div>
+    {% endfor %}
+
+    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="icon">📸</div>
+            <strong>Tap to select photos</strong>
+            <p>or drag and drop here</p>
+            <p>JPG, PNG, GIF, WEBP supported</p>
+        </div>
+        <input type="file" id="fileInput" name="photos" multiple accept="image/*">
+
+        <div class="preview-grid" id="previewGrid"></div>
+        <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+        <button type="submit" class="upload-btn" id="uploadBtn" disabled>Upload Photos</button>
+    </form>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const previewGrid = document.getElementById('previewGrid');
+const uploadBtn = document.getElementById('uploadBtn');
+let selectedFiles = [];
+
+fileInput.addEventListener('change', () => addFiles(fileInput.files));
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles(e.dataTransfer.files);
+});
+
+function addFiles(files) {
+    Array.from(files).forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        selectedFiles.push(file);
+        const reader = new FileReader();
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        const idx = selectedFiles.length - 1;
+        reader.onload = e => {
+            div.innerHTML = `<img src="${e.target.result}">
+                <button class="remove" onclick="removeFile(${idx}, this.parentElement)">✕</button>`;
+        };
+        reader.readAsDataURL(file);
+        previewGrid.appendChild(div);
+    });
+    updateBtn();
+}
+
+function removeFile(idx, el) {
+    selectedFiles[idx] = null;
+    el.remove();
+    updateBtn();
+}
+
+function updateBtn() {
+    const valid = selectedFiles.filter(f => f !== null).length;
+    uploadBtn.disabled = valid === 0;
+    uploadBtn.textContent = valid > 0 ? `Upload ${valid} Photo(s)` : 'Upload Photos';
+}
+
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const valid = selectedFiles.filter(f => f !== null);
+    if (!valid.length) return;
+    const dt = new DataTransfer();
+    valid.forEach(f => dt.items.add(f));
+    fileInput.files = dt.files;
+    document.getElementById('progress').style.display = 'block';
+    document.getElementById('progressBar').style.width = '60%';
+    this.submit();
+});
+</script>
+</body>
+</html>

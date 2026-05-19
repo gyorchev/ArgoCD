@@ -5,87 +5,210 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; display: flex; flex-direction: column; min-height: 100vh; }
         header { background: #16213e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        header a { color: #4a90d9; text-decoration: none; margin-left: 1rem; }
-        .controls { padding: 12px 20px; background: #0f3460; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .controls span { color: #aaa; font-size: 14px; }
-        .sort-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid #4a90d9; background: transparent; color: #4a90d9; cursor: pointer; font-size: 13px; text-decoration: none; }
+        header a { color: #4a90d9; text-decoration: none; margin-left: 1rem; font-size: 14px; }
+        .main { display: flex; flex: 1; }
+        .sidebar { width: 240px; min-width: 240px; background: #16213e; padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1.2rem; }
+        .sidebar h3 { color: #4a90d9; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .sidebar label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ccc; cursor: pointer; margin-bottom: 6px; }
+        .sidebar input[type=checkbox] { accent-color: #4a90d9; width: 16px; height: 16px; }
+        .sidebar input[type=date], .sidebar input[type=text], .sidebar select { width: 100%; padding: 7px 10px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; font-size: 13px; }
+        .sidebar button { width: 100%; padding: 8px; background: #4a90d9; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 14px; }
+        .sidebar .clear-btn { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; margin-top: 4px; }
+        .content { flex: 1; padding: 16px; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .count { color: #aaa; font-size: 14px; }
+        .sort-btns { display: flex; gap: 6px; }
+        .sort-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid #4a90d9; background: transparent; color: #4a90d9; cursor: pointer; font-size: 12px; text-decoration: none; }
         .sort-btn.active { background: #4a90d9; color: white; }
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 20px; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .photo-card { position: relative; background: #16213e; border-radius: 8px; overflow: hidden; }
-        .photo-card img { width: 100%; height: 180px; object-fit: cover; display: block; cursor: pointer; }
-        .photo-info { padding: 6px 10px; }
-        .photo-info .name { font-size: 12px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .photo-info .date { font-size: 11px; color: #666; margin-top: 2px; }
-        .delete-btn { position: absolute; top: 6px; right: 6px; background: rgba(220,50,50,0.85); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 14px; line-height: 28px; }
+        .photo-card img { width: 100%; height: 160px; object-fit: cover; display: block; cursor: pointer; }
+        .photo-info { padding: 6px 8px 8px; }
+        .photo-info .fname { font-size: 11px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .photo-info .date { font-size: 10px; color: #666; margin-top: 2px; }
+        .photo-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+        .tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #0f3460; color: #4a90d9; }
+        .tag.place { background: #1a3a1a; color: #4caf50; }
+        .photo-actions { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px; }
+        .fav-btn { background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; }
+        .tag-btn { font-size: 11px; color: #4a90d9; background: none; border: none; cursor: pointer; }
+        .del-btn { background: rgba(220,50,50,0.8); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px; text-align: center; }
         .empty { text-align: center; padding: 4rem; color: #aaa; grid-column: 1/-1; }
-        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); justify-content: center; align-items: center; z-index: 999; flex-direction: column; gap: 10px; }
+        /* Tag modal */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .modal-box { background: #16213e; border-radius: 12px; padding: 2rem; width: 340px; max-width: 90vw; }
+        .modal-box h3 { margin-bottom: 1rem; color: white; }
+        .modal-box label { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; margin-bottom: 8px; cursor: pointer; }
+        .modal-box input[type=checkbox] { accent-color: #4a90d9; }
+        .modal-box input[type=text] { width: 100%; padding: 8px; background: #0f3460; border: 1px solid #1a4a80; border-radius: 6px; color: white; margin-top: 8px; margin-bottom: 12px; }
+        .modal-actions { display: flex; gap: 8px; }
+        .modal-actions button { flex: 1; padding: 8px; border-radius: 6px; border: none; cursor: pointer; }
+        .modal-save { background: #4a90d9; color: white; }
+        .modal-cancel { background: #333; color: white; }
+        /* Lightbox */
+        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 999; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
         .lightbox.active { display: flex; }
-        .lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 8px; object-fit: contain; }
+        .lightbox img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 6px; }
         .lightbox-name { color: #aaa; font-size: 13px; }
         .lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; cursor: pointer; color: white; }
+        .fav-filter-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid #f39c12; background: transparent; color: #f39c12; cursor: pointer; font-size: 12px; text-decoration: none; }
+        .fav-filter-btn.active { background: #f39c12; color: white; }
     </style>
 </head>
 <body>
-    <header>
-        <span>📷 Photo Gallery ({{ photos|length }} photos)</span>
+<header>
+    <span>📷 Family Gallery</span>
+    <div>
+        <a href="/upload">📤 Upload</a>
+        {% if current_user.is_admin %}<a href="/admin/users">👥 Users</a>{% endif %}
+        <a href="/change-password">🔒 Password</a>
+        <a href="/logout">Logout ({{ current_user.username }})</a>
+    </div>
+</header>
+
+<div class="main">
+    <!-- Sidebar filters -->
+    <form class="sidebar" method="GET" action="/">
         <div>
-            {% if current_user.is_admin %}<a href="/admin/users">Manage Users</a>{% endif %}
-            <a href="/change-password">Change Password</a>
-            <a href="/logout">Logout ({{ current_user.username }})</a>
-        </div>
-    </header>
-
-    <div class="controls">
-        <span>Sort by:</span>
-        <a href="/?sort=newest" class="sort-btn {% if sort == 'newest' %}active{% endif %}">Newest first</a>
-        <a href="/?sort=oldest" class="sort-btn {% if sort == 'oldest' %}active{% endif %}">Oldest first</a>
-        <a href="/?sort=name"   class="sort-btn {% if sort == 'name' %}active{% endif %}">Name A–Z</a>
-    </div>
-
-    <div class="gallery">
-        {% if photos %}
-            {% for p in photos %}
-            <div class="photo-card">
-                <img src="/photo?path={{ p.path | urlencode }}"
-                     alt="{{ p.filename }}"
-                     onclick="openLightbox('/photo?path={{ p.path | urlencode }}', '{{ p.filename }}')">
-                <div class="photo-info">
-                    <div class="name">{{ p.filename }}</div>
-                    <div class="date">{{ p.ctime | int | datetimeformat }}</div>
-                </div>
-                {% if current_user.is_admin %}
-                <form method="POST" action="/delete"
-                      onsubmit="return confirm('Delete {{ p.filename }}?')">
-                    <input type="hidden" name="path" value="{{ p.path }}">
-                    <input type="hidden" name="sort" value="{{ sort }}">
-                    <button class="delete-btn" type="submit">✕</button>
-                </form>
-                {% endif %}
-            </div>
+            <h3>👤 People</h3>
+            {% for person in people_list %}
+            <label>
+                <input type="checkbox" name="people" value="{{ person }}"
+                       {% if person in selected_people %}checked{% endif %}>
+                {{ person }}
+            </label>
             {% endfor %}
-        {% else %}
-            <div class="empty">No photos found in configured sources.</div>
-        {% endif %}
-    </div>
+        </div>
+        <div>
+            <h3>📍 Place</h3>
+            <input type="text" name="place" placeholder="Search place..." value="{{ selected_place }}">
+        </div>
+        <div>
+            <h3>📅 Date Range</h3>
+            <input type="date" name="date_from" value="{{ date_from }}">
+            <div style="color:#666;font-size:11px;text-align:center;margin:4px 0">to</div>
+            <input type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <button type="submit">Apply Filters</button>
+        <a href="/" class="sidebar clear-btn" style="display:block;text-align:center;padding:8px;border-radius:6px;border:1px solid #4a90d9;color:#4a90d9;text-decoration:none;font-size:14px;">Clear</a>
+    </form>
 
-    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
-        <span class="lightbox-close">✕</span>
-        <img id="lightbox-img" src="">
-        <div class="lightbox-name" id="lightbox-name"></div>
-    </div>
+    <!-- Main content -->
+    <div class="content">
+        <div class="topbar">
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span class="count">{{ photos|length }} photos</span>
+                <a href="/?favorites=1&sort={{ sort }}" class="fav-filter-btn {% if favorites_only %}active{% endif %}">❤️ Favorites</a>
+            </div>
+            <div class="sort-btns">
+                <a href="?sort=newest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'newest' %}active{% endif %}">Newest</a>
+                <a href="?sort=oldest{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'oldest' %}active{% endif %}">Oldest</a>
+                <a href="?sort=name{% for p in selected_people %}&people={{ p }}{% endfor %}{% if selected_place %}&place={{ selected_place }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="sort-btn {% if sort == 'name' %}active{% endif %}">Name</a>
+            </div>
+        </div>
 
-    <script>
-        function openLightbox(src, name) {
-            document.getElementById('lightbox-img').src = src;
-            document.getElementById('lightbox-name').textContent = name;
-            document.getElementById('lightbox').classList.add('active');
-        }
-        function closeLightbox() {
-            document.getElementById('lightbox').classList.remove('active');
-        }
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-    </script>
+        <div class="gallery">
+            {% if photos %}
+                {% for p in photos %}
+                <div class="photo-card">
+                    <img src="/photo?path={{ p.path | urlencode }}"
+                         alt="{{ p.filename }}"
+                         onclick="openLightbox('/photo?path={{ p.path | urlencode }}', '{{ p.filename }}')">
+                    <div class="photo-info">
+                        <div class="fname">{{ p.filename }}</div>
+                        <div class="date">{{ p.ctime | int | datetimeformat }}</div>
+                        <div class="photo-tags">
+                            {% if p.people_tags %}
+                                {% for person in p.people_tags.split(',') %}
+                                <span class="tag">{{ person }}</span>
+                                {% endfor %}
+                            {% endif %}
+                            {% if p.place_tags %}
+                                {% for place in p.place_tags.split(',') %}
+                                <span class="tag place">📍{{ place }}</span>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="photo-actions">
+                        <button class="fav-btn" onclick="toggleFav({{ p.id }}, this)" title="Favorite">
+                            {{ '❤️' if p.is_favorite else '🤍' }}
+                        </button>
+                        <button class="tag-btn" onclick="openTagModal({{ p.id }}, '{{ p.people_tags or '' }}', '{{ p.place_tags.split(',')[0] if p.place_tags else '' }}')">🏷️ Tag</button>
+                        {% if current_user.is_admin %}
+                        <form method="POST" action="/delete/{{ p.id }}" onsubmit="return confirm('Delete {{ p.filename }}?')" style="display:inline">
+                            <button class="del-btn" type="submit">✕</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">No photos found.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Tag Modal -->
+<div class="modal" id="tagModal">
+    <div class="modal-box">
+        <h3>🏷️ Tag Photo</h3>
+        <form method="POST" id="tagForm">
+            {% for person in people_list %}
+            <label>
+                <input type="checkbox" name="people" value="{{ person }}" class="person-check"> {{ person }}
+            </label>
+            {% endfor %}
+            <input type="text" name="place" id="placeInput" placeholder="Place (city, region, vacation...)">
+            <div class="modal-actions">
+                <button type="submit" class="modal-save">Save</button>
+                <button type="button" class="modal-cancel" onclick="closeTagModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <span class="lightbox-close">✕</span>
+    <img id="lightbox-img" src="">
+    <div class="lightbox-name" id="lightbox-name"></div>
+</div>
+
+<script>
+function openLightbox(src, name) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-name').textContent = name;
+    document.getElementById('lightbox').classList.add('active');
+}
+function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('active');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeLightbox(); closeTagModal(); } });
+
+function openTagModal(photoId, peopleTags, placeTag) {
+    const form = document.getElementById('tagForm');
+    form.action = '/tag/' + photoId;
+    document.querySelectorAll('.person-check').forEach(cb => {
+        cb.checked = peopleTags ? peopleTags.split(',').map(s=>s.trim()).includes(cb.value) : false;
+    });
+    document.getElementById('placeInput').value = placeTag || '';
+    document.getElementById('tagModal').classList.add('active');
+}
+function closeTagModal() {
+    document.getElementById('tagModal').classList.remove('active');
+}
+
+function toggleFav(photoId, btn) {
+    fetch('/favorite/' + photoId, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => { btn.textContent = btn.textContent.trim() === '❤️' ? '🤍' : '❤️'; });
+}
+</script>
 </body>
 </html>
