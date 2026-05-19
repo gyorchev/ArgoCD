@@ -152,6 +152,29 @@ def manage_users():
     conn.close()
     return render_template('users.html', users=users)
 
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        current = request.form.get('current_password')
+        new = request.form.get('new_password')
+        confirm = request.form.get('confirm_password')
+        conn = get_db()
+        u = conn.execute('SELECT * FROM users WHERE id = ?', (current_user.id,)).fetchone()
+        if not check_password_hash(u['password'], current):
+            flash('Current password is incorrect')
+        elif new != confirm:
+            flash('New passwords do not match')
+        elif len(new) < 6:
+            flash('Password must be at least 6 characters')
+        else:
+            conn.execute('UPDATE users SET password = ? WHERE id = ?',
+                         (generate_password_hash(new), current_user.id))
+            conn.commit()
+            flash('Password changed successfully')
+        conn.close()
+    return render_template('change_password.html')
+
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000)

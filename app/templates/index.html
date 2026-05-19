@@ -32,6 +32,7 @@
         <span>📷 Photo Gallery ({{ photos|length }} photos)</span>
         <div>
             {% if current_user.is_admin %}<a href="/admin/users">Manage Users</a>{% endif %}
+            <a href="/change-password">Change Password</a>
             <a href="/logout">Logout ({{ current_user.username }})</a>
         </div>
     </header>
