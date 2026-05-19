@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit User</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .box { background: #16213e; padding: 2rem; border-radius: 12px; width: 360px; }
+        h2 { margin-bottom: 1.5rem; }
+        label { display: block; color: #aaa; font-size: 13px; margin-bottom: 4px; }
+        input { width: 100%; padding: 10px; margin-bottom: 16px; border: 1px solid #0f3460; border-radius: 6px; background: #0f3460; color: white; box-sizing: border-box; }
+        .hint { font-size: 11px; color: #666; margin-top: -12px; margin-bottom: 16px; }
+        button { width: 100%; padding: 10px; background: #4a90d9; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
+        .flash { padding: 10px; border-radius: 6px; margin-bottom: 1rem; font-size: 14px; background: rgba(220,50,50,0.2); color: #e74c3c; }
+        a { color: #4a90d9; display: block; text-align: center; margin-top: 1rem; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>✏️ Edit User</h2>
+        {% for msg in get_flashed_messages() %}
+        <div class="flash">{{ msg }}</div>
+        {% endfor %}
+        <form method="POST">
+            <label>Username</label>
+            <input type="text" name="username" value="{{ user['username'] }}" required>
+            <label>New Password</label>
+            <input type="password" name="password" placeholder="Leave blank to keep current">
+            <p class="hint">Only fill in if you want to change the password.</p>
+            <button type="submit">Save Changes</button>
+        </form>
+        <a href="/admin/users">← Back to Users</a>
+    </div>
+</body>
+</html>

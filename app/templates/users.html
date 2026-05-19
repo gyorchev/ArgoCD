@@ -29,22 +29,23 @@
         <button type="submit" class="add-btn">Add User</button>
     </form>
     <table>
-        <tr><th>Username</th><th>Role</th><th>Action</th></tr>
-        {% for u in users %}
-        <tr>
-            <td>{{ u['username'] }}</td>
-            <td>{{ 'Admin' if u['is_admin'] else 'Viewer' }}</td>
-            <td>
-                {% if not u['is_admin'] %}
-                <form method="POST">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="user_id" value="{{ u['id'] }}">
-                    <button type="submit" class="del-btn">Delete</button>
-                </form>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
+    <tr><th>Username</th><th>Role</th><th>Actions</th></tr>
+    {% for u in users %}
+    <tr>
+        <td>{{ u['username'] }}</td>
+        <td>{{ 'Admin' if u['is_admin'] else 'Viewer' }}</td>
+        <td style="display:flex;gap:6px;">
+            <a href="/admin/users/edit/{{ u['id'] }}" style="padding:6px 12px;background:#4a90d9;color:white;border-radius:6px;text-decoration:none;font-size:13px;">Edit</a>
+            {% if not u['is_admin'] %}
+            <form method="POST">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="user_id" value="{{ u['id'] }}">
+                <button type="submit" class="del-btn">Delete</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
     </table>
 </body>
 </html>

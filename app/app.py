@@ -326,6 +326,34 @@ def manage_users():
     conn.close()
     return render_template('users.html', users=users)
 
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    if not current_user.is_admin:
+        return redirect(url_for('index'))
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        flash('User not found')
+        return redirect(url_for('manage_users'))
+    if request.method == 'POST':
+        new_username = request.form.get('username').strip()
+        new_password = request.form.get('password').strip()
+        try:
+            if new_password:
+                conn.execute('UPDATE users SET username = ?, password = ? WHERE id = ?',
+                             (new_username, generate_password_hash(new_password), user_id))
+            else:
+                conn.execute('UPDATE users SET username = ? WHERE id = ?',
+                             (new_username, user_id))
+            conn.commit()
+            flash('User updated')
+            return redirect(url_for('manage_users'))
+        except:
+            flash('Username already exists')
+    conn.close()
+    return render_template('edit_user.html', user=user)
+
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000)
