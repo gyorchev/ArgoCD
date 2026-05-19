@@ -30,7 +30,9 @@ spec:
               mountPath: /data
             - name: thumbnails
               mountPath: /photos/thumbnails
-          volumes:
+            - name: uploads
+              mountPath: /photos/uploads
+      volumes:
         - name: photos-holidays
           hostPath:
             path: /mnt/d/photos/holidays
@@ -50,4 +52,8 @@ spec:
         - name: thumbnails
           hostPath:
             path: /mnt/d/photos/thumbnails
+            type: DirectoryOrCreate
+        - name: uploads
+          hostPath:
+            path: /mnt/d/photos/uploads
             type: DirectoryOrCreate
