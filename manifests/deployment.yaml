@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: photo-gallery
-          image: docker.io/library/photo-gallery:v1
+          image: docker.io/library/photo-gallery:v2
           imagePullPolicy: Never
           ports:
             - containerPort: 5000
