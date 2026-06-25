@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-server
+  namespace: mcp-server
+  labels:
+    app: mcp-server
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mcp-server-reader
+  labels:
+    app: mcp-server
+rules:
+  # Core resources - read only
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - services
+      - namespaces
+      - endpoints
+      - events
+    verbs: ["get", "list", "watch"]
+  # Metrics
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+      - nodes
+    verbs: ["get", "list"]
+  # ArgoCD applications
+  - apiGroups: ["argoproj.io"]
+    resources:
+      - applications
+      - appprojects
+    verbs: ["get", "list", "watch"]
+  # Apps - deployments, replicasets etc
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mcp-server-reader
+  labels:
+    app: mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mcp-server-reader
+subjects:
+  - kind: ServiceAccount
+    name: mcp-server
+    namespace: mcp-server
