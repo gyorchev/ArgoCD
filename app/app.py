@@ -632,32 +632,30 @@ def chat_api():
 
     # ── Step 1: gather cluster context based on what the user is asking ──────
     context_parts = []
-    msg_lower = user_message.lower()
-
-    always_fetch = any(w in msg_lower for w in ['health', 'status', 'overview', 'cluster'])
-    wants_pods   = any(w in msg_lower for w in ['pod', 'container', 'crash', 'fail', 'restart', 'running', 'deploy'])
-    wants_nodes  = any(w in msg_lower for w in ['node', 'cpu', 'memory', 'resource', 'metric', 'usage'])
-    wants_argo   = any(w in msg_lower for w in ['argo', 'sync', 'app', 'deploy', 'gitops'])
-    wants_svc    = any(w in msg_lower for w in ['service', 'port', 'endpoint', 'svc'])
-    wants_metrics= any(w in msg_lower for w in ['cpu', 'memory', 'metric', 'usage', 'resource', 'top'])
-
-    if always_fetch or wants_pods or not any([wants_nodes, wants_argo, wants_svc, wants_metrics]):
-        context_parts.append(("POD STATUS", mcp_call("get_pods")))
-
-    if wants_nodes or always_fetch:
-        context_parts.append(("NODE STATUS", mcp_call("get_nodes")))
-
-    if wants_metrics or always_fetch:
-        context_parts.append(("RESOURCE METRICS", mcp_call("get_metrics")))
-
-    if wants_argo or always_fetch:
-        context_parts.append(("ARGOCD APPLICATIONS", mcp_call("get_argocd_apps")))
-
-    if wants_svc:
-        context_parts.append(("SERVICES", mcp_call("get_services")))
+    try:
+        msg_lower = user_message.lower()
+        always_fetch = any(w in msg_lower for w in ['health', 'status', 'overview', 'cluster'])
+        wants_pods   = any(w in msg_lower for w in ['pod', 'container', 'crash', 'fail', 'restart', 'running', 'deploy'])
+        wants_nodes  = any(w in msg_lower for w in ['node', 'cpu', 'memory', 'resource', 'metric', 'usage'])
+        wants_argo   = any(w in msg_lower for w in ['argo', 'sync', 'app', 'deploy', 'gitops'])
+        wants_svc    = any(w in msg_lower for w in ['service', 'port', 'endpoint', 'svc'])
+        wants_metrics= any(w in msg_lower for w in ['cpu', 'memory', 'metric', 'usage', 'resource', 'top'])
+        if always_fetch or wants_pods or not any([wants_nodes, wants_argo, wants_svc, wants_metrics]):
+            context_parts.append(("POD STATUS", mcp_call("get_pods")))
+        if wants_nodes or always_fetch:
+            context_parts.append(("NODE STATUS", mcp_call("get_nodes")))
+        if wants_metrics or always_fetch:
+            context_parts.append(("RESOURCE METRICS", mcp_call("get_metrics")))
+        if wants_argo or always_fetch:
+            context_parts.append(("ARGOCD APPLICATIONS", mcp_call("get_argocd_apps")))
+        if wants_svc:
+            context_parts.append(("SERVICES", mcp_call("get_services")))
+    except Exception as e:
+        context_parts = [("MCP STATUS", f"MCP server unavailable: {e} - answering without live cluster data")]
 
     # Check if user is asking about a specific pod
     # Simple heuristic: if message contains a known pod keyword + describe
+    msg_lower = user_message.lower()
     if 'describe' in msg_lower or 'detail' in msg_lower or 'log' in msg_lower:
         # Try to extract pod name from message - grab anything after 'pod ' or 'describe '
         words = user_message.split()
