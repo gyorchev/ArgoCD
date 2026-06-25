@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>k3s Intelligence // {{ current_user.username }}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --green-dim: #00cc33;
+    --green-dark: #003b00;
+    --green-faint: #001a00;
+    --black: #000000;
+    --panel: #020d02;
+    --border: #00ff4133;
+    --text: #00ff41;
+    --text-dim: #00aa2a;
+    --text-faint: #005510;
+    --red: #ff0040;
+    --amber: #ffaa00;
+    --blue: #00aaff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--black);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Matrix rain canvas */
+  #matrix-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.07;
+    pointer-events: none;
+  }
+
+  /* Layout */
+  .shell {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 0;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green);
+  }
+
+  .logo span { color: var(--text-dim); }
+
+  .status-pills {
+    display: flex;
+    gap: 8px;
+  }
+
+  .pill {
+    font-size: 10px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .pill.live { border-color: var(--green); color: var(--green); }
+  .pill.live::before { content: '● '; animation: blink 1.2s infinite; }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .topbar-right a {
+    color: var(--text-dim);
+    text-decoration: none;
+    letter-spacing: 1px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    transition: all 0.2s;
+  }
+
+  .topbar-right a:hover {
+    color: var(--green);
+    border-color: var(--green);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  /* Main content: sidebar + chat */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-section {
+    padding: 0 16px;
+    margin-bottom: 20px;
+  }
+
+  .sidebar-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .tool-btn::before { content: '> '; color: var(--text-faint); }
+
+  .tool-btn:hover {
+    color: var(--green);
+    border-color: var(--border);
+    background: var(--green-faint);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  .tool-btn:active { transform: translateX(2px); }
+
+  .node-status {
+    padding: 0 16px;
+  }
+
+  .node-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .node-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    flex-shrink: 0;
+  }
+
+  .node-dot.warn { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .node-dot.err { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  /* Chat area */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-dark) transparent;
+  }
+
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--green-dark); }
+
+  /* Message bubbles */
+  .msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+    animation: fadeInUp 0.2s ease;
+  }
+
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; align-items: flex-start; }
+  .msg.system { align-self: center; align-items: center; max-width: 100%; }
+
+  .msg-meta {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+
+  .msg.user .msg-meta { color: var(--text-faint); }
+
+  .msg-body {
+    padding: 10px 14px;
+    border-radius: 2px;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.user .msg-body {
+    background: var(--green-faint);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    text-shadow: 0 0 6px rgba(0,255,65,0.3);
+  }
+
+  .msg.assistant .msg-body {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .msg.system .msg-body {
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+
+  /* Pre/code blocks in assistant messages */
+  .msg.assistant .msg-body pre,
+  .msg.assistant .msg-body code {
+    background: #000;
+    border: 1px solid var(--green-dark);
+    padding: 8px;
+    border-radius: 2px;
+    overflow-x: auto;
+    font-size: 11px;
+    color: var(--green-dim);
+    margin: 6px 0;
+    display: block;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    display: none;
+    align-self: flex-start;
+    padding: 10px 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+
+  .typing-indicator.active { display: flex; gap: 4px; align-items: center; }
+
+  .typing-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: typingDot 1.2s infinite;
+  }
+
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  /* Input bar */
+  .input-bar {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    padding: 14px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+
+  .input-prompt {
+    color: var(--green);
+    font-size: 14px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  #msg-input {
+    width: 100%;
+    background: var(--black);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 8px 12px;
+    resize: none;
+    outline: none;
+    border-radius: 2px;
+    min-height: 36px;
+    max-height: 120px;
+    line-height: 1.5;
+    caret-color: var(--green);
+    transition: border-color 0.2s;
+  }
+
+  #msg-input::placeholder { color: var(--text-faint); }
+  #msg-input:focus { border-color: var(--green); box-shadow: 0 0 10px rgba(0,255,65,0.1); }
+
+  .send-btn {
+    background: var(--green-faint);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    height: 36px;
+  }
+
+  .send-btn:hover {
+    background: var(--green-dark);
+    box-shadow: 0 0 12px rgba(0,255,65,0.3);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  .send-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Scanline overlay */
+  .scanlines {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+  }
+
+  /* Animations */
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes typingDot { 0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+
+  /* Scrollbar */
+  .sidebar::-webkit-scrollbar { width: 3px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--green-dark); }
+
+  /* Connection error banner */
+  .error-banner {
+    display: none;
+    background: rgba(255,0,64,0.1);
+    border: 1px solid var(--red);
+    color: var(--red);
+    font-size: 11px;
+    padding: 6px 20px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  .error-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-canvas"></canvas>
+<div class="scanlines"></div>
+
+<div class="shell">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">K3S<span>::</span>INTEL</div>
+      <div class="status-pills">
+        <div class="pill live" id="mcp-status">MCP</div>
+        <div class="pill" id="ollama-status">OLLAMA</div>
+        <div class="pill">k3s v1.35.5+k3s1</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="clock"></span>
+      <a href="/">← GALLERY</a>
+      <a href="/logout">LOGOUT</a>
+    </div>
+  </div>
+
+  <div class="error-banner" id="error-banner">⚠ MCP SERVER UNREACHABLE — CHECK CONNECTION</div>
+
+  <div class="main">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">QUICK COMMANDS</div>
+        <button class="tool-btn" onclick="sendQuick('What is the overall health of the cluster?')">cluster health</button>
+        <button class="tool-btn" onclick="sendQuick('List all pods and their status across all namespaces')">list pods</button>
+        <button class="tool-btn" onclick="sendQuick('Show me node resource usage - CPU and memory')">node metrics</button>
+        <button class="tool-btn" onclick="sendQuick('Show ArgoCD application sync status')">argocd apps</button>
+        <button class="tool-btn" onclick="sendQuick('List all services and their ports')">services</button>
+        <button class="tool-btn" onclick="sendQuick('Are there any pods in a failed or crash loop state?')">failing pods</button>
+        <button class="tool-btn" onclick="sendQuick('Show me CPU and memory usage for all pods')">pod metrics</button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">NODE STATUS</div>
+        <div class="node-status" id="node-status">
+          <div class="node-item">
+            <div class="node-dot"></div>
+            <span>smarty / control-plane</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">SESSION</div>
+        <div class="node-item">
+          <div class="node-dot"></div>
+          <span>{{ current_user.username }}@homelab</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-area">
+      <div class="messages" id="messages">
+        <div class="msg system">
+          <div class="msg-body">── KUBERNETES INTELLIGENCE TERMINAL INITIALIZED ──</div>
+        </div>
+        <div class="msg system">
+          <div class="msg-body">connected to k3s v1.35.5 cluster · argocd · metrics-server</div>
+        </div>
+        <div class="msg assistant">
+          <div class="msg-meta">SYSTEM // READY</div>
+          <div class="msg-body">Greetings, {{ current_user.username }}. I have access to your k3s cluster on the Raspberry Pi. I can query pod status, node metrics, ArgoCD applications, services, and describe specific resources.
+
+What would you like to know about your cluster?</div>
+        </div>
+      </div>
+
+      <div class="typing-indicator" id="typing">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+
+      <div class="input-bar">
+        <div class="input-prompt">$_</div>
+        <div class="input-wrap">
+          <textarea id="msg-input"
+            placeholder="query the cluster..."
+            rows="1"
+            onkeydown="handleKey(event)"
+            oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">EXEC</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Matrix rain ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF<>[]{}|';
+let drops = [];
+
+function initMatrix() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const cols = Math.floor(canvas.width / 16);
+  drops = Array(cols).fill(1);
+}
+
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#00ff41';
+  ctx.font = '14px Share Tech Mono';
+  drops.forEach((y, i) => {
+    const char = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(char, i * 16, y * 16);
+    if (y * 16 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+
+initMatrix();
+setInterval(drawMatrix, 50);
+window.addEventListener('resize', initMatrix);
+
+// ── Clock ────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+const typingEl = document.getElementById('typing');
+let history = [];
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function ts() {
+  return new Date().toISOString().replace('T', ' ').slice(11, 19);
+}
+
+function appendMsg(role, content) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = role === 'user'
+    ? `{{ current_user.username }} // ${ts()}`
+    : `CLUSTER-AI // ${ts()}`;
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  // Simple code block rendering
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Wrap lines that look like table/code output in <pre>
+  const lines = escaped.split('\n');
+  let inCode = false;
+  let html = '';
+  for (const line of lines) {
+    const isCode = /^[\s│├└─|=\-+]/.test(line) || /\s{2,}/.test(line);
+    if (isCode && !inCode) { html += '<pre>'; inCode = true; }
+    if (!isCode && inCode) { html += '</pre>'; inCode = false; }
+    html += line + '\n';
+  }
+  if (inCode) html += '</pre>';
+
+  body.innerHTML = html;
+
+  if (role !== 'system') div.appendChild(meta);
+  div.appendChild(body);
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+function setStatus(id, active, label) {
+  const el = document.getElementById(id);
+  el.textContent = label;
+  if (active) { el.classList.add('live'); }
+  else { el.classList.remove('live'); }
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  appendMsg('user', text);
+  history.push({ role: 'user', content: text });
+
+  typingEl.classList.add('active');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history: history.slice(-10) })
+    });
+
+    typingEl.classList.remove('active');
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.error) {
+      appendMsg('assistant', `⚠ ERROR: ${data.error}`);
+      document.getElementById('error-banner').classList.add('show');
+    } else {
+      appendMsg('assistant', data.response);
+      history.push({ role: 'assistant', content: data.response });
+      document.getElementById('error-banner').classList.remove('show');
+      setStatus('ollama-status', true, 'OLLAMA');
+    }
+  } catch (err) {
+    typingEl.classList.remove('active');
+    appendMsg('assistant', `⚠ CONNECTION ERROR: ${err.message}\n\nCheck that the MCP server and Ollama are reachable.`);
+    document.getElementById('error-banner').classList.add('show');
+  }
+
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+function sendQuick(text) {
+  inputEl.value = text;
+  sendMessage();
+}
+
+// Check MCP health on load
+fetch('/chat/health')
+  .then(r => r.json())
+  .then(d => {
+    setStatus('mcp-status', d.mcp_ok, 'MCP');
+    setStatus('ollama-status', d.ollama_ok, 'OLLAMA');
+  })
+  .catch(() => {
+    setStatus('mcp-status', false, 'MCP');
+  });
+
+inputEl.focus();
+</script>
+</body>
+</html>

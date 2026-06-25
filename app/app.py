@@ -537,6 +537,169 @@ def edit_user(user_id):
     conn.close()
     return render_template('edit_user.html', user=user)
 
+# ── ADD THESE IMPORTS at the top of app.py (alongside existing imports) ──────
+# import urllib.request
+# import urllib.error
+# import json as json_module  # only if 'json' not already imported
+
+# ── ADD THESE ROUTES before the `if __name__ == '__main__':` line ─────────────
+
+MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'http://mcp-server.mcp-server.svc.cluster.local:8000')
+OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.100:11434')  # your Windows PC IP
+OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:7b')
+
+
+def mcp_call(tool: str, params: dict = {}) -> str:
+    """Call a tool on the MCP server and return the result string."""
+    import urllib.request, urllib.error, json as _json
+    payload = _json.dumps({"tool": tool, "parameters": params}).encode()
+    req = urllib.request.Request(
+        f"{MCP_SERVER_URL}/call",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return data.get("result", "No result")
+    except urllib.error.URLError as e:
+        return f"MCP ERROR: {e}"
+
+
+def ollama_chat(messages: list) -> str:
+    """Send messages to Ollama and return the assistant reply."""
+    import urllib.request, urllib.error, json as _json
+    payload = _json.dumps({
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "stream": False
+    }).encode()
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = _json.loads(resp.read())
+            return data["message"]["content"]
+    except urllib.error.URLError as e:
+        return f"OLLAMA ERROR: {e}"
+
+
+SYSTEM_PROMPT = """You are a Kubernetes cluster assistant with access to a live k3s cluster running on a Raspberry Pi.
+You have already retrieved real-time data from the cluster tools. Use it to answer the user's question clearly and concisely.
+Format tabular data as plain text tables. Highlight any unhealthy or concerning items.
+Be direct and technical. You are talking to a senior DevOps/Platform Engineer."""
+
+
+@app.route('/chat')
+@login_required
+def chat_page():
+    return render_template('chat.html')
+
+
+@app.route('/chat/health')
+@login_required
+def chat_health():
+    import urllib.request, urllib.error
+    mcp_ok, ollama_ok = False, False
+    try:
+        urllib.request.urlopen(f"{MCP_SERVER_URL}/health", timeout=3)
+        mcp_ok = True
+    except Exception:
+        pass
+    try:
+        urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=3)
+        ollama_ok = True
+    except Exception:
+        pass
+    return jsonify({"mcp_ok": mcp_ok, "ollama_ok": ollama_ok})
+
+
+@app.route('/chat', methods=['POST'])
+@login_required
+def chat_api():
+    import json as _json
+    data = request.get_json()
+    user_message = data.get('message', '').strip()
+    history      = data.get('history', [])
+
+    if not user_message:
+        return jsonify({"error": "Empty message"}), 400
+
+    # ── Step 1: gather cluster context based on what the user is asking ──────
+    context_parts = []
+    msg_lower = user_message.lower()
+
+    always_fetch = any(w in msg_lower for w in ['health', 'status', 'overview', 'cluster'])
+    wants_pods   = any(w in msg_lower for w in ['pod', 'container', 'crash', 'fail', 'restart', 'running', 'deploy'])
+    wants_nodes  = any(w in msg_lower for w in ['node', 'cpu', 'memory', 'resource', 'metric', 'usage'])
+    wants_argo   = any(w in msg_lower for w in ['argo', 'sync', 'app', 'deploy', 'gitops'])
+    wants_svc    = any(w in msg_lower for w in ['service', 'port', 'endpoint', 'svc'])
+    wants_metrics= any(w in msg_lower for w in ['cpu', 'memory', 'metric', 'usage', 'resource', 'top'])
+
+    if always_fetch or wants_pods or not any([wants_nodes, wants_argo, wants_svc, wants_metrics]):
+        context_parts.append(("POD STATUS", mcp_call("get_pods")))
+
+    if wants_nodes or always_fetch:
+        context_parts.append(("NODE STATUS", mcp_call("get_nodes")))
+
+    if wants_metrics or always_fetch:
+        context_parts.append(("RESOURCE METRICS", mcp_call("get_metrics")))
+
+    if wants_argo or always_fetch:
+        context_parts.append(("ARGOCD APPLICATIONS", mcp_call("get_argocd_apps")))
+
+    if wants_svc:
+        context_parts.append(("SERVICES", mcp_call("get_services")))
+
+    # Check if user is asking about a specific pod
+    # Simple heuristic: if message contains a known pod keyword + describe
+    if 'describe' in msg_lower or 'detail' in msg_lower or 'log' in msg_lower:
+        # Try to extract pod name from message - grab anything after 'pod ' or 'describe '
+        words = user_message.split()
+        for i, w in enumerate(words):
+            if w.lower() in ('pod', 'describe') and i + 1 < len(words):
+                pod_name = words[i + 1]
+                ns = 'default'
+                if 'argocd' in msg_lower:
+                    ns = 'argocd'
+                elif 'kube' in msg_lower:
+                    ns = 'kube-system'
+                context_parts.append((f"POD DETAIL: {pod_name}", mcp_call("describe_pod", {"name": pod_name, "namespace": ns})))
+                break
+
+    # ── Step 2: build context string ─────────────────────────────────────────
+    context_str = ""
+    for label, result in context_parts:
+        context_str += f"\n\n=== {label} ===\n{result}"
+
+    # ── Step 3: build messages for Ollama ────────────────────────────────────
+    system_with_context = SYSTEM_PROMPT
+    if context_str:
+        system_with_context += f"\n\nCURRENT CLUSTER DATA (fetched live):{context_str}"
+
+    messages = [{"role": "system", "content": system_with_context}]
+
+    # Add conversation history (last 6 turns)
+    for h in history[-6:]:
+        if h.get("role") in ("user", "assistant"):
+            messages.append({"role": h["role"], "content": h["content"]})
+
+    # Add current user message
+    messages.append({"role": "user", "content": user_message})
+
+    # ── Step 4: call Ollama ───────────────────────────────────────────────────
+    reply = ollama_chat(messages)
+
+    if reply.startswith("OLLAMA ERROR"):
+        return jsonify({"error": reply}), 502
+
+    return jsonify({"response": reply})
+
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000)
