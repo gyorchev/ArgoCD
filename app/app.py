@@ -545,8 +545,8 @@ def edit_user(user_id):
 # ── ADD THESE ROUTES before the `if __name__ == '__main__':` line ─────────────
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'http://mcp-server.mcp-server.svc.cluster.local:8000')
-OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.100:11434')  # your Windows PC IP
-OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:7b')
+OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.155:11434')  # your Windows PC IP
+OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:14b')
 
 
 def mcp_call(tool: str, params: dict = {}) -> str:
@@ -582,7 +582,7 @@ def ollama_chat(messages: list) -> str:
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             data = _json.loads(resp.read())
             return data["message"]["content"]
     except urllib.error.URLError as e:
