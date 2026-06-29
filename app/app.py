@@ -544,10 +544,141 @@ def edit_user(user_id):
 
 # ── ADD THESE ROUTES before the `if __name__ == '__main__':` line ─────────────
 
-MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'http://mcp-server.mcp-server.svc.cluster.local:8000')
-OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.155:11434')  # your Windows PC IP
-OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:14b')
+# ── REPLACE everything from MCP_SERVER_URL line to end of file ───────────────
+# (keep all existing routes above, only replace from the chat section down)
 
+MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'http://mcp-server.mcp-server.svc.cluster.local:8000')
+OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.155:11434')
+OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:14b')
+MAX_TOOL_CALLS = 6  # prevent infinite loops
+
+# ── Tool definitions for Ollama ───────────────────────────────────────────────
+OLLAMA_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pods",
+            "description": "List all pods in the k3s cluster with status, restarts and node. Use this to check pod health.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {
+                        "type": "string",
+                        "description": "Kubernetes namespace to filter by, or 'all' for all namespaces. Default: all"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_nodes",
+            "description": "Get node health, roles, Kubernetes version and resource usage.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_metrics",
+            "description": "Get real-time CPU and memory usage for all nodes and pods via metrics-server.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_argocd_apps",
+            "description": "List ArgoCD applications with sync status, health status, repo and path.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_services",
+            "description": "List all Kubernetes services across all namespaces with ports.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "describe_pod",
+            "description": "Get detailed description of a specific pod including events, conditions and resource requests. Use when investigating a specific pod issue.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Pod name"},
+                    "namespace": {"type": "string", "description": "Namespace the pod is in. Default: default"}
+                },
+                "required": ["name"]
+            }
+        }
+    }
+]
+
+SYSTEM_PROMPT = """You are a Kubernetes cluster assistant with access to a live k3s cluster running on a Raspberry Pi (hostname: smarty).
+You have tools to query the cluster in real time. Use them to answer questions accurately.
+When investigating issues, start broad (get_pods) then drill down (describe_pod) as needed.
+Be direct and technical. Format tables as plain text. Highlight unhealthy or concerning items.
+You are talking to a senior DevOps/Platform Engineer named Grisho."""
+
+
+# ── Database helpers ──────────────────────────────────────────────────────────
+
+def init_chat_history():
+    """Create chat_history table if it doesn't exist."""
+    conn = get_db()
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            tools_used TEXT DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+
+def save_message(user_id: int, role: str, content: str, tools_used: list = None):
+    """Save a chat message to the database."""
+    conn = get_db()
+    tools_str = ','.join(tools_used) if tools_used else ''
+    conn.execute(
+        'INSERT INTO chat_history (user_id, role, content, tools_used, created_at) VALUES (?, ?, ?, ?, ?)',
+        (user_id, role, content, tools_str, datetime.now().timestamp())
+    )
+    conn.commit()
+    conn.close()
+
+
+def load_history(user_id: int, limit: int = 20) -> list:
+    """Load recent chat history for a user."""
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT role, content, tools_used, created_at FROM chat_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+        (user_id, limit)
+    ).fetchall()
+    conn.close()
+    # Return in chronological order
+    return list(reversed([dict(r) for r in rows]))
+
+
+def clear_history(user_id: int):
+    """Clear all chat history for a user."""
+    conn = get_db()
+    conn.execute('DELETE FROM chat_history WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── MCP helper ───────────────────────────────────────────────────────────────
 
 def mcp_call(tool: str, params: dict = {}) -> str:
     """Call a tool on the MCP server and return the result string."""
@@ -560,51 +691,141 @@ def mcp_call(tool: str, params: dict = {}) -> str:
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = _json.loads(resp.read())
-            return data.get("result", "No result")
+            return data.get("result", "No result returned")
     except urllib.error.URLError as e:
+        return f"MCP ERROR: {e}"
+    except Exception as e:
         return f"MCP ERROR: {e}"
 
 
-def ollama_chat(messages: list) -> str:
-    """Send messages to Ollama and return the assistant reply."""
+def execute_tool(name: str, arguments: dict) -> str:
+    """Execute a tool call from Ollama."""
+    tool_map = {
+        'get_pods':       lambda a: mcp_call('get_pods', {'namespace': a.get('namespace', 'all')}),
+        'get_nodes':      lambda a: mcp_call('get_nodes'),
+        'get_metrics':    lambda a: mcp_call('get_metrics'),
+        'get_argocd_apps':lambda a: mcp_call('get_argocd_apps'),
+        'get_services':   lambda a: mcp_call('get_services'),
+        'describe_pod':   lambda a: mcp_call('describe_pod', {'name': a['name'], 'namespace': a.get('namespace', 'default')}),
+    }
+    fn = tool_map.get(name)
+    if fn:
+        return fn(arguments)
+    return f"Unknown tool: {name}"
+
+
+# ── Agentic loop ──────────────────────────────────────────────────────────────
+
+def run_agent(user_message: str, history: list) -> tuple[str, list]:
+    """
+    Run the agentic loop: Ollama decides which tools to call,
+    executes them via MCP, feeds results back, repeats until done.
+    Returns (final_response, tools_used_list)
+    """
     import urllib.request, urllib.error, json as _json
-    payload = _json.dumps({
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False
-    }).encode()
-    req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/chat",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            data = _json.loads(resp.read())
-            return data["message"]["content"]
-    except urllib.error.URLError as e:
-        return f"OLLAMA ERROR: {e}"
+
+    # Build messages from history + current message
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # Add conversation history (last 10 turns, user/assistant only)
+    for h in history[-10:]:
+        if h['role'] in ('user', 'assistant'):
+            messages.append({"role": h['role'], "content": h['content']})
+
+    # Add current user message
+    messages.append({"role": "user", "content": user_message})
+
+    tools_used = []
+    iterations = 0
+
+    while iterations < MAX_TOOL_CALLS:
+        iterations += 1
+
+        # Call Ollama with tools
+        payload = _json.dumps({
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "tools": OLLAMA_TOOLS,
+            "stream": False
+        }).encode()
+
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = _json.loads(resp.read())
+        except Exception as e:
+            return f"OLLAMA ERROR: {e}", tools_used
+
+        message = data.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+
+        # No tool calls — Ollama is done, return final answer
+        if not tool_calls:
+            return message.get("content", "No response"), tools_used
+
+        # Append assistant message with tool calls to history
+        messages.append({
+            "role": "assistant",
+            "content": message.get("content", ""),
+            "tool_calls": tool_calls
+        })
+
+        # Execute each tool call and append results
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            tool_name = fn.get("name", "")
+            arguments = fn.get("arguments", {})
+            tool_id = tc.get("id", "")
+
+            result = execute_tool(tool_name, arguments)
+            tools_used.append(tool_name)
+
+            messages.append({
+                "role": "tool",
+                "content": result,
+                "tool_call_id": tool_id
+            })
+
+    # Max iterations reached
+    return "Reached maximum tool call limit. Please try a more specific question.", tools_used
 
 
-SYSTEM_PROMPT = """You are a Kubernetes cluster assistant with access to a live k3s cluster running on a Raspberry Pi.
-You have already retrieved real-time data from the cluster tools. Use it to answer the user's question clearly and concisely.
-Format tabular data as plain text tables. Highlight any unhealthy or concerning items.
-Be direct and technical. You are talking to a senior DevOps/Platform Engineer."""
-
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route('/chat')
 @login_required
 def chat_page():
-    return render_template('chat.html')
+    init_chat_history()
+    history = load_history(current_user.id, limit=50)
+    return render_template('chat.html', history=history)
+
+
+@app.route('/chat/history')
+@login_required
+def chat_history_api():
+    history = load_history(current_user.id, limit=50)
+    return jsonify(history)
+
+
+@app.route('/chat/clear', methods=['POST'])
+@login_required
+def chat_clear():
+    clear_history(current_user.id)
+    return jsonify({"ok": True})
 
 
 @app.route('/chat/health')
 @login_required
 def chat_health():
-    import urllib.request, urllib.error
+    import urllib.request
     mcp_ok, ollama_ok = False, False
     try:
         urllib.request.urlopen(f"{MCP_SERVER_URL}/health", timeout=3)
@@ -625,79 +846,26 @@ def chat_api():
     import json as _json
     data = request.get_json()
     user_message = data.get('message', '').strip()
-    history      = data.get('history', [])
 
     if not user_message:
         return jsonify({"error": "Empty message"}), 400
 
-    # ── Step 1: gather cluster context based on what the user is asking ──────
-    context_parts = []
-    try:
-        msg_lower = user_message.lower()
-        always_fetch = any(w in msg_lower for w in ['health', 'status', 'overview', 'cluster'])
-        wants_pods   = any(w in msg_lower for w in ['pod', 'container', 'crash', 'fail', 'restart', 'running', 'deploy'])
-        wants_nodes  = any(w in msg_lower for w in ['node', 'cpu', 'memory', 'resource', 'metric', 'usage'])
-        wants_argo   = any(w in msg_lower for w in ['argo', 'sync', 'app', 'deploy', 'gitops'])
-        wants_svc    = any(w in msg_lower for w in ['service', 'port', 'endpoint', 'svc'])
-        wants_metrics= any(w in msg_lower for w in ['cpu', 'memory', 'metric', 'usage', 'resource', 'top'])
-        if always_fetch or wants_pods or not any([wants_nodes, wants_argo, wants_svc, wants_metrics]):
-            context_parts.append(("POD STATUS", mcp_call("get_pods")))
-        if wants_nodes or always_fetch:
-            context_parts.append(("NODE STATUS", mcp_call("get_nodes")))
-        if wants_metrics or always_fetch:
-            context_parts.append(("RESOURCE METRICS", mcp_call("get_metrics")))
-        if wants_argo or always_fetch:
-            context_parts.append(("ARGOCD APPLICATIONS", mcp_call("get_argocd_apps")))
-        if wants_svc:
-            context_parts.append(("SERVICES", mcp_call("get_services")))
-    except Exception as e:
-        context_parts = [("MCP STATUS", f"MCP server unavailable: {e} - answering without live cluster data")]
+    # Load history for context
+    history = load_history(current_user.id, limit=10)
 
-    # Check if user is asking about a specific pod
-    # Simple heuristic: if message contains a known pod keyword + describe
-    msg_lower = user_message.lower()
-    if 'describe' in msg_lower or 'detail' in msg_lower or 'log' in msg_lower:
-        # Try to extract pod name from message - grab anything after 'pod ' or 'describe '
-        words = user_message.split()
-        for i, w in enumerate(words):
-            if w.lower() in ('pod', 'describe') and i + 1 < len(words):
-                pod_name = words[i + 1]
-                ns = 'default'
-                if 'argocd' in msg_lower:
-                    ns = 'argocd'
-                elif 'kube' in msg_lower:
-                    ns = 'kube-system'
-                context_parts.append((f"POD DETAIL: {pod_name}", mcp_call("describe_pod", {"name": pod_name, "namespace": ns})))
-                break
+    # Save user message
+    save_message(current_user.id, 'user', user_message)
 
-    # ── Step 2: build context string ─────────────────────────────────────────
-    context_str = ""
-    for label, result in context_parts:
-        context_str += f"\n\n=== {label} ===\n{result}"
-
-    # ── Step 3: build messages for Ollama ────────────────────────────────────
-    system_with_context = SYSTEM_PROMPT
-    if context_str:
-        system_with_context += f"\n\nCURRENT CLUSTER DATA (fetched live):{context_str}"
-
-    messages = [{"role": "system", "content": system_with_context}]
-
-    # Add conversation history (last 6 turns)
-    for h in history[-6:]:
-        if h.get("role") in ("user", "assistant"):
-            messages.append({"role": h["role"], "content": h["content"]})
-
-    # Add current user message
-    messages.append({"role": "user", "content": user_message})
-
-    # ── Step 4: call Ollama ───────────────────────────────────────────────────
-    reply = ollama_chat(messages)
+    # Run agentic loop
+    reply, tools_used = run_agent(user_message, history)
 
     if reply.startswith("OLLAMA ERROR"):
         return jsonify({"error": reply}), 502
 
-    return jsonify({"response": reply})
+    # Save assistant response
+    save_message(current_user.id, 'assistant', reply, tools_used)
 
-if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5000)
+    return jsonify({
+        "response": reply,
+        "tools_used": tools_used
+    })

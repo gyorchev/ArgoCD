@@ -35,7 +35,6 @@
     flex-direction: column;
   }
 
-  /* Matrix rain canvas */
   #matrix-canvas {
     position: fixed;
     top: 0; left: 0;
@@ -45,14 +44,12 @@
     pointer-events: none;
   }
 
-  /* Layout */
   .shell {
     position: relative;
     z-index: 1;
     display: flex;
     flex-direction: column;
     height: 100vh;
-    padding: 0;
   }
 
   /* Top bar */
@@ -66,11 +63,7 @@
     flex-shrink: 0;
   }
 
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
 
   .logo {
     font-family: 'Orbitron', monospace;
@@ -83,10 +76,7 @@
 
   .logo span { color: var(--text-dim); }
 
-  .status-pills {
-    display: flex;
-    gap: 8px;
-  }
+  .status-pills { display: flex; gap: 8px; }
 
   .pill {
     font-size: 10px;
@@ -124,12 +114,20 @@
     text-shadow: 0 0 8px var(--green);
   }
 
-  /* Main content: sidebar + chat */
-  .main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
+  .clear-btn {
+    color: var(--text-faint) !important;
+    border-color: transparent !important;
+    font-size: 10px !important;
   }
+
+  .clear-btn:hover {
+    color: var(--red) !important;
+    border-color: var(--red) !important;
+    text-shadow: none !important;
+  }
+
+  /* Main */
+  .main { display: flex; flex: 1; overflow: hidden; }
 
   /* Sidebar */
   .sidebar {
@@ -143,10 +141,7 @@
     overflow-y: auto;
   }
 
-  .sidebar-section {
-    padding: 0 16px;
-    margin-bottom: 20px;
-  }
+  .sidebar-section { padding: 0 16px; margin-bottom: 20px; }
 
   .sidebar-label {
     font-size: 9px;
@@ -183,12 +178,6 @@
     text-shadow: 0 0 8px var(--green);
   }
 
-  .tool-btn:active { transform: translateX(2px); }
-
-  .node-status {
-    padding: 0 16px;
-  }
-
   .node-item {
     display: flex;
     align-items: center;
@@ -206,16 +195,8 @@
     flex-shrink: 0;
   }
 
-  .node-dot.warn { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
-  .node-dot.err { background: var(--red); box-shadow: 0 0 6px var(--red); }
-
   /* Chat area */
-  .chat-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
   .messages {
     flex: 1;
@@ -229,10 +210,9 @@
   }
 
   .messages::-webkit-scrollbar { width: 4px; }
-  .messages::-webkit-scrollbar-track { background: transparent; }
   .messages::-webkit-scrollbar-thumb { background: var(--green-dark); }
 
-  /* Message bubbles */
+  /* Messages */
   .msg {
     display: flex;
     flex-direction: column;
@@ -250,8 +230,6 @@
     color: var(--text-faint);
     margin-bottom: 4px;
   }
-
-  .msg.user .msg-meta { color: var(--text-faint); }
 
   .msg-body {
     padding: 10px 14px;
@@ -284,7 +262,6 @@
     text-align: center;
   }
 
-  /* Pre/code blocks in assistant messages */
   .msg.assistant .msg-body pre,
   .msg.assistant .msg-body code {
     background: #000;
@@ -298,17 +275,42 @@
     display: block;
   }
 
-  /* Typing indicator */
-  .typing-indicator {
+  /* Tools used badge */
+  .tools-badge {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 5px;
+  }
+
+  .tool-tag {
+    font-size: 9px;
+    padding: 1px 6px;
+    border: 1px solid var(--green-dark);
+    border-radius: 2px;
+    color: var(--text-faint);
+    letter-spacing: 0.5px;
+  }
+
+  .tool-tag::before { content: '⬡ '; }
+
+  /* Thinking indicator */
+  .thinking {
     display: none;
     align-self: flex-start;
     padding: 10px 14px;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 2px;
+    font-size: 11px;
+    color: var(--text-dim);
+    gap: 8px;
+    align-items: center;
   }
 
-  .typing-indicator.active { display: flex; gap: 4px; align-items: center; }
+  .thinking.active { display: flex; }
+
+  .thinking-text { animation: blink 1s infinite; }
 
   .typing-dot {
     width: 6px; height: 6px;
@@ -339,10 +341,7 @@
     text-shadow: 0 0 8px var(--green);
   }
 
-  .input-wrap {
-    flex: 1;
-    position: relative;
-  }
+  .input-wrap { flex: 1; }
 
   #msg-input {
     width: 100%;
@@ -384,15 +383,11 @@
   .send-btn:hover {
     background: var(--green-dark);
     box-shadow: 0 0 12px rgba(0,255,65,0.3);
-    text-shadow: 0 0 8px var(--green);
   }
 
-  .send-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
+  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* Scanline overlay */
+  /* Scanlines */
   .scanlines {
     position: fixed;
     top: 0; left: 0;
@@ -400,24 +395,11 @@
     z-index: 2;
     pointer-events: none;
     background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
     );
   }
 
-  /* Animations */
-  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-  @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes typingDot { 0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
-
-  /* Scrollbar */
-  .sidebar::-webkit-scrollbar { width: 3px; }
-  .sidebar::-webkit-scrollbar-thumb { background: var(--green-dark); }
-
-  /* Connection error banner */
   .error-banner {
     display: none;
     background: rgba(255,0,64,0.1);
@@ -430,6 +412,14 @@
   }
 
   .error-banner.show { display: block; }
+
+  /* Animations */
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes typingDot { 0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+
+  .sidebar::-webkit-scrollbar { width: 3px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--green-dark); }
 </style>
 </head>
 <body>
@@ -438,29 +428,26 @@
 <div class="scanlines"></div>
 
 <div class="shell">
-
-  <!-- Top bar -->
   <div class="topbar">
     <div class="topbar-left">
       <div class="logo">K3S<span>::</span>INTEL</div>
       <div class="status-pills">
-        <div class="pill live" id="mcp-status">MCP</div>
+        <div class="pill" id="mcp-status">MCP</div>
         <div class="pill" id="ollama-status">OLLAMA</div>
         <div class="pill">k3s v1.35.5+k3s1</div>
       </div>
     </div>
     <div class="topbar-right">
       <span id="clock"></span>
+      <a href="#" class="clear-btn" onclick="clearHistory()">✕ CLEAR</a>
       <a href="/">← GALLERY</a>
       <a href="/logout">LOGOUT</a>
     </div>
   </div>
 
-  <div class="error-banner" id="error-banner">⚠ MCP SERVER UNREACHABLE — CHECK CONNECTION</div>
+  <div class="error-banner" id="error-banner">⚠ CONNECTION ERROR — CHECK MCP SERVER AND OLLAMA</div>
 
   <div class="main">
-
-    <!-- Sidebar -->
     <div class="sidebar">
       <div class="sidebar-section">
         <div class="sidebar-label">QUICK COMMANDS</div>
@@ -475,11 +462,9 @@
 
       <div class="sidebar-section">
         <div class="sidebar-label">NODE STATUS</div>
-        <div class="node-status" id="node-status">
-          <div class="node-item">
-            <div class="node-dot"></div>
-            <span>smarty / control-plane</span>
-          </div>
+        <div class="node-item">
+          <div class="node-dot"></div>
+          <span>smarty / control-plane</span>
         </div>
       </div>
 
@@ -492,27 +477,51 @@
       </div>
     </div>
 
-    <!-- Chat -->
     <div class="chat-area">
       <div class="messages" id="messages">
         <div class="msg system">
-          <div class="msg-body">── KUBERNETES INTELLIGENCE TERMINAL INITIALIZED ──</div>
+          <div class="msg-body">── K3S INTELLIGENCE TERMINAL // AGENTIC MODE ──</div>
         </div>
         <div class="msg system">
-          <div class="msg-body">connected to k3s v1.35.5 cluster · argocd · metrics-server</div>
+          <div class="msg-body">connected to k3s v1.35.5 cluster · argocd · metrics-server · ollama qwen2.5:14b</div>
         </div>
-        <div class="msg assistant">
-          <div class="msg-meta">SYSTEM // READY</div>
-          <div class="msg-body">Greetings, {{ current_user.username }}. I have access to your k3s cluster on the Raspberry Pi. I can query pod status, node metrics, ArgoCD applications, services, and describe specific resources.
+
+        <!-- History loaded from server -->
+        {% if history %}
+          {% for msg in history %}
+            <div class="msg {{ msg.role }}">
+              <div class="msg-meta">
+                {% if msg.role == 'user' %}
+                  {{ current_user.username }} // {{ msg.created_at | int | datetimeformat }}
+                {% else %}
+                  CLUSTER-AI // {{ msg.created_at | int | datetimeformat }}
+                {% endif %}
+              </div>
+              <div class="msg-body">{{ msg.content }}</div>
+              {% if msg.tools_used %}
+                <div class="tools-badge">
+                  {% for tool in msg.tools_used.split(',') %}
+                    <span class="tool-tag">{{ tool }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="msg assistant">
+            <div class="msg-meta">SYSTEM // READY</div>
+            <div class="msg-body">Greetings, {{ current_user.username }}. I have direct access to your k3s cluster on the Raspberry Pi and will call tools as needed to answer your questions accurately.
 
 What would you like to know about your cluster?</div>
-        </div>
+          </div>
+        {% endif %}
       </div>
 
-      <div class="typing-indicator" id="typing">
+      <div class="thinking" id="thinking">
         <div class="typing-dot"></div>
         <div class="typing-dot"></div>
         <div class="typing-dot"></div>
+        <span class="thinking-text" id="thinking-text">querying cluster...</span>
       </div>
 
       <div class="input-bar">
@@ -527,22 +536,20 @@ What would you like to know about your cluster?</div>
         <button class="send-btn" id="send-btn" onclick="sendMessage()">EXEC</button>
       </div>
     </div>
-
   </div>
 </div>
 
 <script>
-// ── Matrix rain ──────────────────────────────────────────────────────────────
+// ── Matrix rain ───────────────────────────────────────────────────────────────
 const canvas = document.getElementById('matrix-canvas');
 const ctx = canvas.getContext('2d');
-const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF<>[]{}|';
+const chars = 'アイウエオカキクケコサシスセソ0123456789ABCDEF<>[]{}|kubectl apply get pods';
 let drops = [];
 
 function initMatrix() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const cols = Math.floor(canvas.width / 16);
-  drops = Array(cols).fill(1);
+  drops = Array(Math.floor(canvas.width / 16)).fill(1);
 }
 
 function drawMatrix() {
@@ -551,8 +558,7 @@ function drawMatrix() {
   ctx.fillStyle = '#00ff41';
   ctx.font = '14px Share Tech Mono';
   drops.forEach((y, i) => {
-    const char = chars[Math.floor(Math.random() * chars.length)];
-    ctx.fillText(char, i * 16, y * 16);
+    ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 16, y * 16);
     if (y * 16 > canvas.height && Math.random() > 0.975) drops[i] = 0;
     drops[i]++;
   });
@@ -562,21 +568,25 @@ initMatrix();
 setInterval(drawMatrix, 50);
 window.addEventListener('resize', initMatrix);
 
-// ── Clock ────────────────────────────────────────────────────────────────────
+// ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
-  const now = new Date();
   document.getElementById('clock').textContent =
-    now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
 updateClock();
 setInterval(updateClock, 1000);
 
-// ── Chat ─────────────────────────────────────────────────────────────────────
+// ── Chat ──────────────────────────────────────────────────────────────────────
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
-const typingEl = document.getElementById('typing');
-let history = [];
+const thinkingEl = document.getElementById('thinking');
+const thinkingText = document.getElementById('thinking-text');
+
+// Scroll to bottom on load
+window.addEventListener('load', () => {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+});
 
 function autoResize(el) {
   el.style.height = 'auto';
@@ -594,51 +604,82 @@ function ts() {
   return new Date().toISOString().replace('T', ' ').slice(11, 19);
 }
 
-function appendMsg(role, content) {
+function appendMsg(role, content, toolsUsed = []) {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
 
-  const meta = document.createElement('div');
-  meta.className = 'msg-meta';
-  meta.textContent = role === 'user'
-    ? `{{ current_user.username }} // ${ts()}`
-    : `CLUSTER-AI // ${ts()}`;
+  if (role !== 'system') {
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = role === 'user'
+      ? `{{ current_user.username }} // ${ts()}`
+      : `CLUSTER-AI // ${ts()}`;
+    div.appendChild(meta);
+  }
 
   const body = document.createElement('div');
   body.className = 'msg-body';
 
-  // Simple code block rendering
+  // Render pre blocks for table-like content
   const escaped = content
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // Wrap lines that look like table/code output in <pre>
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const lines = escaped.split('\n');
-  let inCode = false;
-  let html = '';
+  let inCode = false, html = '';
   for (const line of lines) {
-    const isCode = /^[\s│├└─|=\-+]/.test(line) || /\s{2,}/.test(line);
+    const isCode = /^[\s│├└─|=\-+]/.test(line) || /\s{3,}/.test(line);
     if (isCode && !inCode) { html += '<pre>'; inCode = true; }
     if (!isCode && inCode) { html += '</pre>'; inCode = false; }
     html += line + '\n';
   }
   if (inCode) html += '</pre>';
-
   body.innerHTML = html;
-
-  if (role !== 'system') div.appendChild(meta);
   div.appendChild(body);
+
+  // Tools used badges
+  if (toolsUsed && toolsUsed.length > 0) {
+    const badge = document.createElement('div');
+    badge.className = 'tools-badge';
+    [...new Set(toolsUsed)].forEach(t => {
+      const span = document.createElement('span');
+      span.className = 'tool-tag';
+      span.textContent = t;
+      badge.appendChild(span);
+    });
+    div.appendChild(badge);
+  }
+
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  return div;
 }
 
 function setStatus(id, active, label) {
   const el = document.getElementById(id);
   el.textContent = label;
-  if (active) { el.classList.add('live'); }
-  else { el.classList.remove('live'); }
+  active ? el.classList.add('live') : el.classList.remove('live');
+}
+
+const thinkingMessages = [
+  'querying cluster...',
+  'calling tools...',
+  'analysing data...',
+  'reasoning...',
+  'fetching metrics...',
+];
+let thinkingInterval;
+
+function startThinking() {
+  let i = 0;
+  thinkingEl.classList.add('active');
+  thinkingText.textContent = thinkingMessages[0];
+  thinkingInterval = setInterval(() => {
+    i = (i + 1) % thinkingMessages.length;
+    thinkingText.textContent = thinkingMessages[i];
+  }, 2000);
+}
+
+function stopThinking() {
+  clearInterval(thinkingInterval);
+  thinkingEl.classList.remove('active');
 }
 
 async function sendMessage() {
@@ -650,19 +691,17 @@ async function sendMessage() {
   sendBtn.disabled = true;
 
   appendMsg('user', text);
-  history.push({ role: 'user', content: text });
-
-  typingEl.classList.add('active');
+  startThinking();
   messagesEl.scrollTop = messagesEl.scrollHeight;
 
   try {
     const res = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: history.slice(-10) })
+      body: JSON.stringify({ message: text })
     });
 
-    typingEl.classList.remove('active');
+    stopThinking();
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -671,14 +710,14 @@ async function sendMessage() {
       appendMsg('assistant', `⚠ ERROR: ${data.error}`);
       document.getElementById('error-banner').classList.add('show');
     } else {
-      appendMsg('assistant', data.response);
-      history.push({ role: 'assistant', content: data.response });
+      appendMsg('assistant', data.response, data.tools_used || []);
       document.getElementById('error-banner').classList.remove('show');
       setStatus('ollama-status', true, 'OLLAMA');
+      setStatus('mcp-status', true, 'MCP');
     }
   } catch (err) {
-    typingEl.classList.remove('active');
-    appendMsg('assistant', `⚠ CONNECTION ERROR: ${err.message}\n\nCheck that the MCP server and Ollama are reachable.`);
+    stopThinking();
+    appendMsg('assistant', `⚠ CONNECTION ERROR: ${err.message}`);
     document.getElementById('error-banner').classList.add('show');
   }
 
@@ -691,16 +730,23 @@ function sendQuick(text) {
   sendMessage();
 }
 
-// Check MCP health on load
+async function clearHistory() {
+  if (!confirm('Clear all chat history?')) return;
+  await fetch('/chat/clear', { method: 'POST' });
+  // Remove all messages except system ones
+  const msgs = messagesEl.querySelectorAll('.msg:not(.system)');
+  msgs.forEach(m => m.remove());
+  appendMsg('system', '── HISTORY CLEARED ──');
+}
+
+// Health check on load
 fetch('/chat/health')
   .then(r => r.json())
   .then(d => {
     setStatus('mcp-status', d.mcp_ok, 'MCP');
     setStatus('ollama-status', d.ollama_ok, 'OLLAMA');
   })
-  .catch(() => {
-    setStatus('mcp-status', false, 'MCP');
-  });
+  .catch(() => setStatus('mcp-status', false, 'MCP'));
 
 inputEl.focus();
 </script>
