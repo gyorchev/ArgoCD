@@ -552,13 +552,12 @@ OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.155:11434')
 OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:14b')
 MAX_TOOL_CALLS = 6  # prevent infinite loops
 
-
 OLLAMA_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "get_pods",
-            "description": "List all pods in the k3s cluster with status, restarts and node. Use this to check pod health.",
+            "description": "List all pods in the k3s cluster with status, restarts and node. Use this first to check pod health.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -616,8 +615,76 @@ OLLAMA_TOOLS = [
                 "required": ["name"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_logs",
+            "description": "Get recent logs from a specific pod. Use after describe_pod to see actual error output.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pod_name": {"type": "string", "description": "Pod name"},
+                    "namespace": {"type": "string", "description": "Namespace. Default: default"},
+                    "lines": {"type": "integer", "description": "Number of log lines. Default: 50"},
+                    "container": {"type": "string", "description": "Container name for multi-container pods"}
+                },
+                "required": ["pod_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_events",
+            "description": "Get recent cluster events sorted by time. Warnings shown first. Use to see what happened recently.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Namespace to filter, or 'all'. Default: all"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ingress",
+            "description": "List all ingress rules, Traefik IngressRoutes and entrypoints.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "restart_deployment",
+            "description": "Restart a deployment by triggering a rolling restart. Use to fix crashlooping pods after diagnosing the issue.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Deployment name"},
+                    "namespace": {"type": "string", "description": "Namespace. Default: default"}
+                },
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "argocd_sync",
+            "description": "Trigger an ArgoCD hard refresh and sync for a specific application.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app_name": {"type": "string", "description": "ArgoCD application name"}
+                },
+                "required": ["app_name"]
+            }
+        }
     }
 ]
+
 
 SYSTEM_PROMPT = """You are a Kubernetes cluster assistant with access to a live k3s cluster running on a Raspberry Pi (hostname: smarty).
 You have tools to query the cluster in real time. Use them to answer questions accurately.
@@ -703,18 +770,22 @@ def mcp_call(tool: str, params: dict = {}) -> str:
 def execute_tool(name: str, arguments: dict) -> str:
     """Execute a tool call from Ollama."""
     tool_map = {
-        'get_pods':       lambda a: mcp_call('get_pods', {'namespace': a.get('namespace', 'all')}),
-        'get_nodes':      lambda a: mcp_call('get_nodes'),
-        'get_metrics':    lambda a: mcp_call('get_metrics'),
-        'get_argocd_apps':lambda a: mcp_call('get_argocd_apps'),
-        'get_services':   lambda a: mcp_call('get_services'),
-        'describe_pod':   lambda a: mcp_call('describe_pod', {'name': a['name'], 'namespace': a.get('namespace', 'default')}),
+        'get_pods':            lambda a: mcp_call('get_pods', {'namespace': a.get('namespace', 'all')}),
+        'get_nodes':           lambda a: mcp_call('get_nodes'),
+        'get_metrics':         lambda a: mcp_call('get_metrics'),
+        'get_argocd_apps':     lambda a: mcp_call('get_argocd_apps'),
+        'get_services':        lambda a: mcp_call('get_services'),
+        'describe_pod':        lambda a: mcp_call('describe_pod', {'name': a['name'], 'namespace': a.get('namespace', 'default')}),
+        'get_logs':            lambda a: mcp_call('get_logs', {'pod_name': a['pod_name'], 'namespace': a.get('namespace', 'default'), 'lines': a.get('lines', 50), 'container': a.get('container', '')}),
+        'get_events':          lambda a: mcp_call('get_events', {'namespace': a.get('namespace', 'all')}),
+        'get_ingress':         lambda a: mcp_call('get_ingress'),
+        'restart_deployment':  lambda a: mcp_call('restart_deployment', {'name': a['name'], 'namespace': a.get('namespace', 'default')}),
+        'argocd_sync':         lambda a: mcp_call('argocd_sync', {'app_name': a['app_name']}),
     }
     fn = tool_map.get(name)
     if fn:
         return fn(arguments)
-    return f"Unknown tool: {name}"
-
+    return f"Unknown tool: {name}. Available: {', '.join(tool_map.keys())}"
 
 
 

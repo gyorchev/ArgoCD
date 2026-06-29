@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 MCP Server - Kubernetes stats for Raspberry Pi k3s cluster
-Exposes tools: get_pods, get_nodes, get_argocd_apps, get_metrics, describe_pod
+Tools: get_pods, get_nodes, get_argocd_apps, get_metrics, describe_pod,
+       get_services, get_logs, get_events, get_ingress,
+       restart_deployment, argocd_sync
 """
 
 import json
@@ -19,7 +21,6 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def run_kubectl(args: list[str]) -> dict:
-    """Run a kubectl command and return parsed JSON output."""
     cmd = ["kubectl"] + args + ["-o", "json"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
@@ -32,11 +33,10 @@ def run_kubectl(args: list[str]) -> dict:
         return {"error": f"Failed to parse kubectl output: {e}"}
 
 
-def run_kubectl_text(args: list[str]) -> str:
-    """Run a kubectl command and return raw text output."""
+def run_kubectl_text(args: list[str], timeout: int = 15) -> str:
     cmd = ["kubectl"] + args
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if result.returncode != 0:
             return f"ERROR: {result.stderr.strip()}"
         return result.stdout.strip()
@@ -49,7 +49,6 @@ def run_kubectl_text(args: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 def get_pods(namespace: str = "all") -> str:
-    """List all pods with status, restarts, age and node."""
     if namespace == "all":
         data = run_kubectl(["get", "pods", "-A"])
     else:
@@ -70,25 +69,19 @@ def get_pods(namespace: str = "all") -> str:
         name = pod["metadata"]["name"]
         node = pod["spec"].get("nodeName", "<none>")
         phase = pod["status"].get("phase", "Unknown")
-
-        # Get container statuses
         container_statuses = pod["status"].get("containerStatuses", [])
         restarts = sum(cs.get("restartCount", 0) for cs in container_statuses)
-
-        # Detect CrashLoopBackOff or other waiting states
         for cs in container_statuses:
             state = cs.get("state", {})
             if "waiting" in state:
                 phase = state["waiting"].get("reason", phase)
                 break
-
         lines.append(f"{ns:<20} {name:<55} {phase:<20} {str(restarts):<10} {node:<15}")
 
     return "\n".join(lines)
 
 
 def get_nodes() -> str:
-    """Get node health, roles, version and resource usage."""
     data = run_kubectl(["get", "nodes"])
     if "error" in data:
         return f"Error fetching nodes: {data['error']}"
@@ -97,7 +90,6 @@ def get_nodes() -> str:
     if not items:
         return "No nodes found."
 
-    # Also get top nodes if metrics-server is available
     top = run_kubectl_text(["top", "nodes", "--no-headers"])
 
     lines = ["=== NODE STATUS ==="]
@@ -129,7 +121,6 @@ def get_nodes() -> str:
 
 
 def get_argocd_apps() -> str:
-    """List ArgoCD applications with sync and health status."""
     data = run_kubectl(["get", "applications", "-n", "argocd"])
     if "error" in data:
         return f"Error fetching ArgoCD apps: {data['error']}"
@@ -155,7 +146,6 @@ def get_argocd_apps() -> str:
 
 
 def get_metrics() -> str:
-    """Get CPU and memory usage for all pods via metrics-server."""
     top_pods = run_kubectl_text(["top", "pods", "-A", "--no-headers"])
     top_nodes = run_kubectl_text(["top", "nodes", "--no-headers"])
 
@@ -181,9 +171,7 @@ def get_metrics() -> str:
 
 
 def describe_pod(name: str, namespace: str = "default") -> str:
-    """Describe a specific pod - events, conditions, resource requests."""
     output = run_kubectl_text(["describe", "pod", name, "-n", namespace])
-    # Trim to avoid huge output - keep first 100 lines
     lines = output.splitlines()
     if len(lines) > 100:
         lines = lines[:100] + ["... (truncated)"]
@@ -191,7 +179,6 @@ def describe_pod(name: str, namespace: str = "default") -> str:
 
 
 def get_services() -> str:
-    """List all services across namespaces."""
     data = run_kubectl(["get", "svc", "-A"])
     if "error" in data:
         return f"Error fetching services: {data['error']}"
@@ -212,6 +199,124 @@ def get_services() -> str:
         lines.append(f"{ns:<20} {name:<45} {stype:<15} {cluster_ip:<16} {ports:<30}")
 
     return "\n".join(lines)
+
+
+def get_logs(pod_name: str, namespace: str = "default", lines: int = 50, container: str = "") -> str:
+    """Get recent logs from a pod."""
+    args = ["logs", pod_name, "-n", namespace, f"--tail={lines}"]
+    if container:
+        args += ["-c", container]
+    output = run_kubectl_text(args, timeout=20)
+    if not output:
+        return "No logs found or pod has not started yet."
+    return output
+
+
+def get_events(namespace: str = "all") -> str:
+    """Get recent cluster events sorted by time, warnings highlighted."""
+    if namespace == "all":
+        data = run_kubectl(["get", "events", "-A", "--sort-by=.lastTimestamp"])
+    else:
+        data = run_kubectl(["get", "events", "-n", namespace, "--sort-by=.lastTimestamp"])
+
+    if "error" in data:
+        return f"Error fetching events: {data['error']}"
+
+    items = data.get("items", [])
+    if not items:
+        return "No events found."
+
+    lines = [f"{'NAMESPACE':<20} {'TYPE':<10} {'REASON':<25} {'OBJECT':<40} {'MESSAGE':<60}"]
+    lines.append("-" * 155)
+
+    # Show last 30 events, warnings first
+    warnings = [i for i in items if i.get("type") == "Warning"]
+    normal = [i for i in items if i.get("type") != "Warning"]
+    sorted_items = warnings[-15:] + normal[-15:]
+
+    for event in sorted_items:
+        ns = event["metadata"]["namespace"]
+        etype = event.get("type", "Normal")
+        reason = event.get("reason", "")
+        obj = f"{event.get('involvedObject', {}).get('kind', '')}/{event.get('involvedObject', {}).get('name', '')}"
+        message = event.get("message", "")[:58]
+        prefix = "!" if etype == "Warning" else " "
+        lines.append(f"{prefix}{ns:<19} {etype:<10} {reason:<25} {obj:<40} {message:<60}")
+
+    return "\n".join(lines)
+
+
+def get_ingress() -> str:
+    """List all ingress rules and Traefik IngressRoutes."""
+    lines = []
+
+    # Standard ingresses
+    data = run_kubectl(["get", "ingress", "-A"])
+    if "error" not in data and data.get("items"):
+        lines.append("=== STANDARD INGRESSES ===")
+        lines.append(f"{'NAMESPACE':<20} {'NAME':<30} {'CLASS':<15} {'HOSTS':<40} {'PORTS':<10}")
+        lines.append("-" * 115)
+        for ing in data["items"]:
+            ns = ing["metadata"]["namespace"]
+            name = ing["metadata"]["name"]
+            cls = ing["spec"].get("ingressClassName", "<none>")
+            rules = ing["spec"].get("rules", [])
+            hosts = ", ".join(r.get("host", "*") for r in rules) or "*"
+            lines.append(f"{ns:<20} {name:<30} {cls:<15} {hosts:<40}")
+    else:
+        lines.append("=== STANDARD INGRESSES ===")
+        lines.append("  No standard ingresses found.")
+
+    # Traefik IngressRoutes
+    ir_data = run_kubectl_text(["get", "ingressroute", "-A", "--no-headers", "2>/dev/null"], timeout=10)
+    lines.append("\n=== TRAEFIK INGRESSROUTES ===")
+    if ir_data.startswith("ERROR") or not ir_data:
+        lines.append("  No IngressRoutes found (or Traefik CRDs not installed).")
+    else:
+        for line in ir_data.splitlines():
+            lines.append(f"  {line}")
+
+    # Traefik services via NodePort
+    lines.append("\n=== TRAEFIK ENTRYPOINTS ===")
+    traefik_svc = run_kubectl_text(["get", "svc", "traefik", "-n", "kube-system", "--no-headers"])
+    if not traefik_svc.startswith("ERROR"):
+        lines.append(f"  {traefik_svc}")
+
+    return "\n".join(lines)
+
+
+def restart_deployment(name: str, namespace: str = "default") -> str:
+    """Restart a deployment by triggering a rolling restart."""
+    output = run_kubectl_text(["rollout", "restart", f"deployment/{name}", "-n", namespace])
+    if output.startswith("ERROR"):
+        return f"Failed to restart deployment {name}: {output}"
+    # Check rollout status
+    status = run_kubectl_text(["rollout", "status", f"deployment/{name}", "-n", namespace, "--timeout=30s"])
+    return f"Restart triggered: {output}\nRollout status: {status}"
+
+
+def argocd_sync(app_name: str) -> str:
+    """Trigger an ArgoCD sync for a specific application."""
+    # Use kubectl to patch the app annotation to trigger sync
+    output = run_kubectl_text([
+        "annotate", "application", app_name,
+        "-n", "argocd",
+        "argocd.argoproj.io/refresh=hard",
+        "--overwrite"
+    ])
+    if output.startswith("ERROR"):
+        return f"Failed to trigger sync for {app_name}: {output}"
+
+    # Check current sync status
+    data = run_kubectl([f"get", "application", app_name, "-n", "argocd"])
+    if "error" in data:
+        return f"Sync triggered but could not get status: {output}"
+
+    status = data.get("status", {})
+    sync = status.get("sync", {}).get("status", "Unknown")
+    health = status.get("health", {}).get("status", "Unknown")
+
+    return f"ArgoCD sync triggered for '{app_name}'\nCurrent sync: {sync}\nHealth: {health}\n{output}"
 
 
 # ---------------------------------------------------------------------------
@@ -264,12 +369,64 @@ TOOLS = {
         "description": "List all Kubernetes services across all namespaces",
         "parameters": {"type": "object", "properties": {}},
         "fn": lambda p: get_services()
+    },
+    "get_logs": {
+        "description": "Get recent logs from a specific pod. Use after describe_pod to see actual error output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pod_name": {"type": "string", "description": "Pod name"},
+                "namespace": {"type": "string", "description": "Namespace", "default": "default"},
+                "lines": {"type": "integer", "description": "Number of log lines to fetch", "default": 50},
+                "container": {"type": "string", "description": "Container name (for multi-container pods)", "default": ""}
+            },
+            "required": ["pod_name"]
+        },
+        "fn": lambda p: get_logs(p["pod_name"], p.get("namespace", "default"), p.get("lines", 50), p.get("container", ""))
+    },
+    "get_events": {
+        "description": "Get recent cluster events sorted by time. Warnings are shown first. Use to see what happened recently.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": "string", "description": "Namespace to filter by, or 'all'", "default": "all"}
+            }
+        },
+        "fn": lambda p: get_events(p.get("namespace", "all"))
+    },
+    "get_ingress": {
+        "description": "List all ingress rules, Traefik IngressRoutes and entrypoints",
+        "parameters": {"type": "object", "properties": {}},
+        "fn": lambda p: get_ingress()
+    },
+    "restart_deployment": {
+        "description": "Restart a deployment by triggering a rolling restart. Use to fix crashlooping pods.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Deployment name"},
+                "namespace": {"type": "string", "description": "Namespace", "default": "default"}
+            },
+            "required": ["name"]
+        },
+        "fn": lambda p: restart_deployment(p["name"], p.get("namespace", "default"))
+    },
+    "argocd_sync": {
+        "description": "Trigger an ArgoCD hard refresh and sync for a specific application",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "app_name": {"type": "string", "description": "ArgoCD application name"}
+            },
+            "required": ["app_name"]
+        },
+        "fn": lambda p: argocd_sync(p["app_name"])
     }
 }
 
 
 # ---------------------------------------------------------------------------
-# HTTP Server - simple JSON API
+# HTTP Server
 # ---------------------------------------------------------------------------
 
 class MCPHandler(BaseHTTPRequestHandler):
@@ -298,10 +455,7 @@ class MCPHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"status": "ok", "tools": list(TOOLS.keys())})
         elif self.path == "/tools":
             tools_def = {
-                name: {
-                    "description": t["description"],
-                    "parameters": t["parameters"]
-                }
+                name: {"description": t["description"], "parameters": t["parameters"]}
                 for name, t in TOOLS.items()
             }
             self.send_json(200, tools_def)

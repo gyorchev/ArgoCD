@@ -22,7 +22,7 @@ spec:
       containers:
         - name: mcp-server
           # UPDATE THIS after your first docker build + push:
-          image: docker.io/library/mcp-server:latest
+          image: docker.io/library/mcp-server:v2
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
