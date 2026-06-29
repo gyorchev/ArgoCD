@@ -839,11 +839,33 @@ def run_agent(user_message: str, history: list) -> tuple[str, list]:
 
         message = data.get("message", {})
         tool_calls = message.get("tool_calls", [])
-
-        
+        # No tool calls - check if Ollama wrote JSON tool calls in content
         if not tool_calls:
-            return message.get("content", "No response"), tools_used
-
+            content_text = message.get("content", "")
+            import re as _re, json as _json
+            json_blocks = _re.findall(r'```(?:json)?\s*([\[\{].*?[\]\}])\s*```', content_text, _re.DOTALL)
+            parsed_calls = []
+            for block in json_blocks:
+                try:
+                    parsed = _json.loads(block)
+                    if isinstance(parsed, list):
+                        parsed_calls.extend(parsed)
+                    elif isinstance(parsed, dict) and "name" in parsed:
+                        parsed_calls.append(parsed)
+                except Exception:
+                    pass
+            if parsed_calls:
+                for tc in parsed_calls:
+                    tool_name = tc.get("name", "")
+                    arguments = tc.get("arguments", {})
+                    if tool_name:
+                        result = execute_tool(tool_name, arguments)
+                        tools_used.append(tool_name)
+                        messages.append({"role": "tool", "content": result, "tool_call_id": "extracted"})
+                clean = _re.sub(r'```(?:json)?\s*[\[\{].*?[\]\}]\s*```', '', content_text, flags=_re.DOTALL).strip()
+                messages.append({"role": "assistant", "content": clean})
+                continue
+            return content_text, tools_used
         # Append assistant message with tool calls to history
         messages.append({
             "role": "assistant",
