@@ -537,14 +537,14 @@ def edit_user(user_id):
     conn.close()
     return render_template('edit_user.html', user=user)
 
-# ── ADD THESE IMPORTS at the top of app.py (alongside existing imports) ──────
+
 # import urllib.request
 # import urllib.error
 # import json as json_module  # only if 'json' not already imported
 
-# ── ADD THESE ROUTES before the `if __name__ == '__main__':` line ─────────────
 
-# ── REPLACE everything from MCP_SERVER_URL line to end of file ───────────────
+
+
 # (keep all existing routes above, only replace from the chat section down)
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'http://mcp-server.mcp-server.svc.cluster.local:8000')
@@ -552,7 +552,7 @@ OLLAMA_URL     = os.environ.get('OLLAMA_URL',     'http://192.168.0.155:11434')
 OLLAMA_MODEL   = os.environ.get('OLLAMA_MODEL',   'qwen2.5:14b')
 MAX_TOOL_CALLS = 6  # prevent infinite loops
 
-# ── Tool definitions for Ollama ───────────────────────────────────────────────
+
 OLLAMA_TOOLS = [
     {
         "type": "function",
@@ -626,7 +626,7 @@ Be direct and technical. Format tables as plain text. Highlight unhealthy or con
 You are talking to a senior DevOps/Platform Engineer named Grisho."""
 
 
-# ── Database helpers ──────────────────────────────────────────────────────────
+
 
 def init_chat_history():
     """Create chat_history table if it doesn't exist."""
@@ -678,7 +678,7 @@ def clear_history(user_id: int):
     conn.close()
 
 
-# ── MCP helper ───────────────────────────────────────────────────────────────
+
 
 def mcp_call(tool: str, params: dict = {}) -> str:
     """Call a tool on the MCP server and return the result string."""
@@ -716,7 +716,7 @@ def execute_tool(name: str, arguments: dict) -> str:
     return f"Unknown tool: {name}"
 
 
-# ── Agentic loop ──────────────────────────────────────────────────────────────
+
 
 def run_agent(user_message: str, history: list) -> tuple[str, list]:
     """
@@ -767,7 +767,7 @@ def run_agent(user_message: str, history: list) -> tuple[str, list]:
         message = data.get("message", {})
         tool_calls = message.get("tool_calls", [])
 
-        # No tool calls — Ollama is done, return final answer
+        
         if not tool_calls:
             return message.get("content", "No response"), tools_used
 
@@ -798,7 +798,7 @@ def run_agent(user_message: str, history: list) -> tuple[str, list]:
     return "Reached maximum tool call limit. Please try a more specific question.", tools_used
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @app.route('/chat')
 @login_required
@@ -869,3 +869,8 @@ def chat_api():
         "response": reply,
         "tools_used": tools_used
     })
+
+if __name__ == '__main__':
+    init_db()
+    init_chat_history()
+    app.run(host='0.0.0.0', port=5000)
