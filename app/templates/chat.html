@@ -420,6 +420,174 @@
 
   .sidebar::-webkit-scrollbar { width: 3px; }
   .sidebar::-webkit-scrollbar-thumb { background: var(--green-dark); }
+
+  :root {
+    --red-bright: #ff0033;
+    --red-dim: #cc0029;
+    --red-dark: #3b0008;
+    --red-faint: #1a0003;
+  }
+
+  .alerts-panel {
+    width: 300px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--red-bright);
+    background: var(--red-faint);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #alert-matrix-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.06;
+    pointer-events: none;
+  }
+
+  .alerts-scanlines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(255,0,51,0.02) 2px, rgba(255,0,51,0.02) 4px
+    );
+  }
+
+  .alerts-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .alerts-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--red-bright);
+    background: rgba(255, 0, 51, 0.04);
+    flex-shrink: 0;
+  }
+
+  .alerts-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--red-bright);
+    text-shadow: 0 0 12px var(--red-bright);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .alerts-label::before { content: '\26A0 '; }
+
+  .alert-count {
+    background: var(--red-bright);
+    color: var(--black);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 9px;
+    font-weight: 700;
+  }
+
+  .alert-count.zero {
+    background: transparent;
+    border: 1px solid var(--red-dark);
+    color: var(--red-dim);
+  }
+
+  .alert-count.pulse { animation: alertPulse 1s infinite; }
+
+  .alerts-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--red-dark) transparent;
+  }
+
+  .alerts-scroll::-webkit-scrollbar { width: 4px; }
+  .alerts-scroll::-webkit-scrollbar-thumb { background: var(--red-dark); }
+
+  .alert-card {
+    margin-bottom: 12px;
+    padding: 11px;
+    border: 1px solid var(--red-bright);
+    background: rgba(255, 0, 51, 0.05);
+    border-radius: 2px;
+    font-size: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    animation: fadeInUp 0.3s ease;
+    box-shadow: 0 0 14px rgba(255, 0, 51, 0.08);
+  }
+
+  .alert-card.resolved {
+    border-color: var(--red-dark);
+    background: rgba(255, 0, 51, 0.015);
+    opacity: 0.55;
+    box-shadow: none;
+  }
+
+  .alert-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+  }
+
+  .alert-name {
+    color: var(--red-bright);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(255, 0, 51, 0.5);
+  }
+
+  .alert-card.resolved .alert-name { color: var(--red-dim); text-shadow: none; }
+  .alert-card.resolved .alert-name::after { content: ' [RESOLVED]'; font-size: 8px; opacity: 0.7; }
+
+  .alert-time { color: var(--red-dim); opacity: 0.6; font-size: 9px; }
+
+  .alert-target { color: var(--red-dim); margin-bottom: 7px; font-size: 9px; letter-spacing: 0.5px; }
+  .alert-target::before { content: '\2B21 '; }
+
+  .alert-summary { color: #ffaaaa; line-height: 1.6; margin-bottom: 7px; }
+
+  .alert-diagnosis {
+    color: #ffcccc;
+    opacity: 0.85;
+    border-top: 1px solid var(--red-dark);
+    padding-top: 7px;
+    margin-top: 7px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .alert-diagnosis::-webkit-scrollbar { width: 3px; }
+  .alert-diagnosis::-webkit-scrollbar-thumb { background: var(--red-dark); }
+
+  .alert-pending { color: var(--amber); font-size: 9px; letter-spacing: 0.5px; animation: blink 1.2s infinite; }
+  .alert-pending::before { content: '\2B21 '; }
+
+  .alerts-empty { padding: 30px 10px; text-align: center; color: var(--red-dark); font-size: 10px; letter-spacing: 1px; }
+  .alerts-empty::before { content: '\2014 '; }
+  .alerts-empty::after { content: ' \2014'; }
+
+  @keyframes alertPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,51,0.5); }
+    50% { box-shadow: 0 0 0 5px rgba(255,0,51,0); }
+  }
 </style>
 </head>
 <body>
@@ -537,6 +705,21 @@ What would you like to know about your cluster?</div>
       </div>
     </div>
   </div>
+    <div class="alerts-panel">
+      <canvas id="alert-matrix-canvas"></canvas>
+      <div class="alerts-scanlines"></div>
+      <div class="alerts-content">
+        <div class="alerts-header">
+          <div class="alerts-label">
+            <span>ALERTS</span>
+            <span class="alert-count zero" id="alert-count">0</span>
+          </div>
+        </div>
+        <div class="alerts-scroll" id="alerts-list">
+          <div class="alerts-empty">no alerts // cluster quiet</div>
+        </div>
+      </div>
+    </div>
 </div>
 
 <script>
@@ -749,6 +932,81 @@ fetch('/chat/health')
   .catch(() => setStatus('mcp-status', false, 'MCP'));
 
 inputEl.focus();
+
+// Red matrix rain for the alerts panel
+const alertCanvas = document.getElementById("alert-matrix-canvas");
+const alertCtx = alertCanvas.getContext("2d");
+const alertChars = "!#@$%&*XX01ERR FAIL CRIT";
+let alertDrops = [];
+function initAlertMatrix() {
+  const panel = document.querySelector(".alerts-panel");
+  alertCanvas.width = panel.clientWidth;
+  alertCanvas.height = panel.clientHeight;
+  alertDrops = Array(Math.floor(alertCanvas.width / 14)).fill(1);
+}
+function drawAlertMatrix() {
+  alertCtx.fillStyle = "rgba(26,0,3,0.08)";
+  alertCtx.fillRect(0, 0, alertCanvas.width, alertCanvas.height);
+  alertCtx.fillStyle = "#ff0033";
+  alertCtx.font = "12px Share Tech Mono";
+  alertDrops.forEach((y, i) => {
+    alertCtx.fillText(alertChars[Math.floor(Math.random() * alertChars.length)], i * 14, y * 14);
+    if (y * 14 > alertCanvas.height && Math.random() > 0.98) alertDrops[i] = 0;
+    alertDrops[i]++;
+  });
+}
+initAlertMatrix();
+setInterval(drawAlertMatrix, 80);
+window.addEventListener("resize", initAlertMatrix);
+function fmtAlertTime(ts) {
+  return new Date(ts * 1000).toISOString().replace("T", " ").slice(11, 19);
+}
+function escapeHtmlAlert(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function renderAlerts(alerts) {
+  const list = document.getElementById("alerts-list");
+  const countEl = document.getElementById("alert-count");
+  const firing = alerts.filter(a => a.status === "firing");
+  countEl.textContent = firing.length;
+  countEl.className = firing.length > 0 ? "alert-count pulse" : "alert-count zero";
+  if (alerts.length === 0) {
+    list.innerHTML = "<div class=\"alerts-empty\">no alerts // cluster quiet</div>";
+    return;
+  }
+  list.innerHTML = "";
+  alerts.forEach(a => {
+    const card = document.createElement("div");
+    card.className = "alert-card" + (a.status === "resolved" ? " resolved" : "");
+    const target = [a.namespace, a.pod].filter(Boolean).join(" / ") || "cluster-wide";
+    let diagnosisHtml = "";
+    if (a.diagnosis) {
+      diagnosisHtml = `<div class="alert-diagnosis">${escapeHtmlAlert(a.diagnosis)}</div>`;
+    } else if (a.status === "firing") {
+      diagnosisHtml = `<div class="alert-pending">investigating...</div>`;
+    }
+    card.innerHTML = `
+      <div class="alert-card-header">
+        <span class="alert-name">${escapeHtmlAlert(a.alertname)}</span>
+        <span class="alert-time">${fmtAlertTime(a.created_at)}</span>
+      </div>
+      <div class="alert-target">${escapeHtmlAlert(target)}</div>
+      <div class="alert-summary">${escapeHtmlAlert(a.summary || a.description || "")}</div>
+      ${diagnosisHtml}
+    `;
+    list.appendChild(card);
+  });
+}
+async function pollAlerts() {
+  try {
+    const res = await fetch("/alerts");
+    const alerts = await res.json();
+    renderAlerts(alerts);
+  } catch (err) {
+  }
+}
+pollAlerts();
+setInterval(pollAlerts, 8000);
 </script>
 </body>
 </html>
