@@ -1,0 +1,163 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: "27.x.x"
+    helm:
+      valuesObject:
+        # Sized for Raspberry Pi 4 (4GB RAM total, ~2GB available)
+        server:
+          retention: "1d"
+          persistentVolume:
+            enabled: false   # use emptyDir - no PV/PVC infra on this cluster yet
+          resources:
+            requests:
+              cpu: 75m
+              memory: 200Mi
+            limits:
+              cpu: 400m
+              memory: 384Mi
+          global:
+            scrape_interval: 30s
+            evaluation_interval: 30s
+          service:
+            type: ClusterIP
+
+        # Alertmanager handles routing fired alerts to our webhook - lighter
+        # and more purpose-built than Grafana's alerting engine
+        alertmanager:
+          enabled: true
+          persistence:
+            enabled: false
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          service:
+            type: ClusterIP
+
+          # Routes every firing alert to our Flask webhook endpoint
+          config:
+            global:
+              resolve_timeout: 5m
+            route:
+              receiver: mcp-webhook
+              group_by: ['alertname', 'namespace']
+              group_wait: 10s
+              group_interval: 30s
+              repeat_interval: 1h
+            receivers:
+              - name: mcp-webhook
+                webhook_configs:
+                  - url: 'http://photo-gallery.default.svc.cluster.local:5000/webhook/alert'
+                    send_resolved: true
+
+        # node-exporter DaemonSet - single pod on this single-node cluster.
+        # Gives host-level OS metrics that cAdvisor doesn't expose:
+        # disk space, load average, real CPU idle time, memory available.
+        prometheus-node-exporter:
+          enabled: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+
+        # kube-state-metrics - required for kube_pod_container_status_restarts_total
+        # which the PodCrashLooping and DemoPodCrashLooping rules depend on.
+        # Stateless, cheap to start/stop - can scale to 0 outside demo windows:
+        #   kubectl scale deployment kube-state-metrics -n monitoring --replicas=0
+        kube-state-metrics:
+          enabled: true
+          replicas: 1
+          resources:
+            requests:
+              cpu: 20m
+              memory: 48Mi
+            limits:
+              cpu: 80m
+              memory: 96Mi
+
+        pushgateway:
+          enabled: false
+
+        # Alert rules - evaluated by Prometheus, fired to Alertmanager when triggered
+        serverFiles:
+          alerting_rules.yml:
+            groups:
+              - name: pod-health
+                rules:
+                  - alert: PodCrashLooping
+                    expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+                    for: 2m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Pod {{ $labels.pod }} is crash looping"
+                      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted more than 3 times in 15 minutes."
+
+                  - alert: ContainerHighMemory
+                    expr: |
+                      (sum(container_memory_working_set_bytes{container!="", container!="POD"}) by (pod, namespace)
+                      / sum(container_spec_memory_limit_bytes{container!="", container!="POD"} > 0) by (pod, namespace)) > 0.9
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Pod {{ $labels.pod }} is near its memory limit"
+                      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is using over 90% of its memory limit."
+
+                  - alert: PodNotReady
+                    expr: sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"}) > 0
+                    for: 10m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "Pod {{ $labels.pod }} not ready"
+                      description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-running phase for over 10 minutes."
+
+                  - alert: HighNodeCPU
+                    expr: |
+                      100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Node CPU usage is high"
+                      description: "Node {{ $labels.instance }} CPU usage has been above 90% for 10 minutes."
+
+              - name: demo
+                rules:
+                  # Fast-firing version of PodCrashLooping for live demos -
+                  # production uses 'for: 2m' above, this fires in 20s so it
+                  # doesn't stall a live interview waiting on the evaluation window.
+                  - alert: DemoPodCrashLooping
+                    expr: increase(kube_pod_container_status_restarts_total{namespace="default"}[5m]) > 1
+                    for: 20s
+                    labels:
+                      severity: warning
+                      demo: "true"
+                    annotations:
+                      summary: "[DEMO] Pod {{ $labels.pod }} is crash looping"
+                      description: "Demo trigger: pod {{ $labels.namespace }}/{{ $labels.pod }} restarted - investigate now."
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
