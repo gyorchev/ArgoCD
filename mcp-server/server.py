@@ -323,7 +323,50 @@ def argocd_sync(app_name: str) -> str:
 # Tool registry
 # ---------------------------------------------------------------------------
 
+def start_crashpod() -> str:
+    """Deploy the hardcoded demo crash-loop pod. No parameters accepted -
+    always targets the same fixed pod name/namespace/image. Cannot be used
+    to start any other workload."""
+    check = run_kubectl_text(["get", "pod", "crashpod", "-n", "default", "--no-headers"])
+    if not check.startswith("ERROR") and check.strip():
+        return "crashpod already exists and is running. Delete it first to restart the demo."
+
+    output = run_kubectl_text([
+        "run", "crashpod",
+        "--image=busybox",
+        "--restart=Always",
+        "--namespace=default",
+        "--",
+        "sh", "-c", "echo 'simulating failure'; exit 1"
+    ])
+    if output.startswith("ERROR"):
+        return f"Failed to start crashpod: {output}"
+    return f"crashpod deployed: {output}"
+
+
+def delete_crashpod() -> str:
+    """Delete the hardcoded demo crash-loop pod. No parameters accepted -
+    always targets the same fixed pod name/namespace. Cannot be used to
+    delete any other workload."""
+    output = run_kubectl_text(["delete", "pod", "crashpod", "-n", "default", "--grace-period=0", "--force"])
+    if output.startswith("ERROR"):
+        if "NotFound" in output:
+            return "crashpod does not exist - nothing to delete."
+        return f"Failed to delete crashpod: {output}"
+    return f"crashpod deleted: {output}"
+
+
 TOOLS = {
+    "start_crashpod": {
+        "description": "Deploy the hardcoded demo crash-loop pod. No parameters - always the same fixed pod.",
+        "parameters": {"type": "object", "properties": {}},
+        "fn": lambda p: start_crashpod()
+    },
+    "delete_crashpod": {
+        "description": "Delete the hardcoded demo crash-loop pod. No parameters - always the same fixed pod.",
+        "parameters": {"type": "object", "properties": {}},
+        "fn": lambda p: delete_crashpod()
+    },
     "get_pods": {
         "description": "List all pods across the k3s cluster with status, restarts and node assignment",
         "parameters": {
