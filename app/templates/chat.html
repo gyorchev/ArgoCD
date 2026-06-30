@@ -777,6 +777,7 @@ What would you like to know about your cluster?</div>
       </div>
     </div>
     <div class="alerts-panel">
+        <button id="alerts-toggle-btn" class="alerts-toggle-btn" onclick="toggleAlertsPanel()">&gt;</button>
       <canvas id="alert-matrix-canvas"></canvas>
       <div class="alerts-scanlines"></div>
       <div class="alerts-content">
@@ -786,7 +787,6 @@ What would you like to know about your cluster?</div>
             <span class="alert-count zero" id="alert-count">0</span>
           </div>
         </div>
-        <button id="alerts-toggle-btn" class="alerts-toggle-btn" onclick="toggleAlertsPanel()">&gt;</button>
         <div class="alerts-scroll" id="alerts-list">
           <div class="alerts-empty">no alerts // cluster quiet</div>
         </div>
