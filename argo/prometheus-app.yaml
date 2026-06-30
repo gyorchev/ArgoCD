@@ -27,7 +27,8 @@ spec:
             scrape_interval: 30s
             evaluation_interval: 30s
           service:
-            type: ClusterIP
+            type: NodePort
+            nodePort: 30090
 
         # Alertmanager handles routing fired alerts to our webhook - lighter
         # and more purpose-built than Grafana's alerting engine
@@ -91,6 +92,7 @@ spec:
 
         pushgateway:
           enabled: false
+          replicaCount: 0
 
         # Alert rules - evaluated by Prometheus, fired to Alertmanager when triggered
         serverFiles:
