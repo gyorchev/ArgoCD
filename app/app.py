@@ -907,6 +907,24 @@ def dismiss_alert_api(alert_id):
     return jsonify({"ok": True, "id": alert_id})
 
 
+@app.route('/demo/crashpod/start', methods=['POST'])
+@login_required
+def demo_start_crashpod():
+    """Deploy the hardcoded demo crash-loop pod via MCP. No parameters accepted
+    from the request - this only ever calls the fixed start_crashpod tool."""
+    result = mcp_call('start_crashpod')
+    return jsonify({"result": result})
+
+
+@app.route('/demo/crashpod/delete', methods=['POST'])
+@login_required
+def demo_delete_crashpod():
+    """Delete the hardcoded demo crash-loop pod via MCP. No parameters accepted
+    from the request - this only ever calls the fixed delete_crashpod tool."""
+    result = mcp_call('delete_crashpod')
+    return jsonify({"result": result})
+
+
 
 
 

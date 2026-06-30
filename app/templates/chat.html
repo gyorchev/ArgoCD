@@ -178,6 +178,65 @@
     text-shadow: 0 0 8px var(--green);
   }
 
+  .demo-controls {
+    border-top: 1px dashed var(--text-faint);
+    padding-top: 14px;
+  }
+
+  .demo-label {
+    color: var(--amber) !important;
+  }
+
+  .demo-btn {
+    border-color: rgba(255, 170, 0, 0.3) !important;
+  }
+
+  .demo-btn:hover {
+    color: var(--amber) !important;
+    border-color: var(--amber) !important;
+    background: rgba(255, 170, 0, 0.08) !important;
+    text-shadow: 0 0 8px var(--amber) !important;
+  }
+
+  .demo-btn-danger {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 1px solid rgba(255, 0, 64, 0.3);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .demo-btn-danger::before { content: '> '; color: var(--text-faint); }
+
+  .demo-btn-danger:hover {
+    color: var(--red);
+    border-color: var(--red);
+    background: rgba(255, 0, 64, 0.08);
+    text-shadow: 0 0 8px var(--red);
+  }
+
+  .demo-result {
+    margin-top: 8px;
+    font-size: 9px;
+    color: var(--text-faint);
+    line-height: 1.5;
+    min-height: 12px;
+    word-break: break-word;
+  }
+
+  .demo-result.success { color: var(--amber); }
+  .demo-result.error { color: var(--red); }
+
+
   .node-item {
     display: flex;
     align-items: center;
@@ -699,6 +758,12 @@
         <button class="tool-btn" onclick="sendQuick('Are there any pods in a failed or crash loop state?')">failing pods</button>
         <button class="tool-btn" onclick="sendQuick('Show me CPU and memory usage for all pods')">pod metrics</button>
       </div>
+      <div class="sidebar-section demo-controls">
+        <div class="sidebar-label demo-label">DEMO CONTROLS</div>
+        <button class="tool-btn demo-btn" onclick="startCrashpod()">+ start crashpod</button>
+        <button class="tool-btn demo-btn-danger" onclick="deleteCrashpod()">- delete crashpod</button>
+        <div id="demo-result" class="demo-result"></div>
+      </div>
 
       <div class="sidebar-section">
         <div class="sidebar-label">NODE STATUS</div>
@@ -984,6 +1049,36 @@ async function sendMessage() {
 function sendQuick(text) {
   inputEl.value = text;
   sendMessage();
+}
+
+async function startCrashpod() {
+  const resultEl = document.getElementById("demo-result");
+  resultEl.className = "demo-result";
+  resultEl.textContent = "deploying...";
+  try {
+    const res = await fetch("/demo/crashpod/start", { method: "POST" });
+    const data = await res.json();
+    resultEl.textContent = data.result;
+    resultEl.className = "demo-result success";
+  } catch (err) {
+    resultEl.textContent = "Error: " + err.message;
+    resultEl.className = "demo-result error";
+  }
+}
+
+async function deleteCrashpod() {
+  const resultEl = document.getElementById("demo-result");
+  resultEl.className = "demo-result";
+  resultEl.textContent = "deleting...";
+  try {
+    const res = await fetch("/demo/crashpod/delete", { method: "POST" });
+    const data = await res.json();
+    resultEl.textContent = data.result;
+    resultEl.className = "demo-result success";
+  } catch (err) {
+    resultEl.textContent = "Error: " + err.message;
+    resultEl.className = "demo-result error";
+  }
 }
 
 async function clearHistory() {
