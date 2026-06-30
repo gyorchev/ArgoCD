@@ -687,14 +687,21 @@ OLLAMA_TOOLS = [
 
 
 SYSTEM_PROMPT = """You are a Kubernetes cluster assistant for a k3s cluster on a Raspberry Pi (hostname: smarty).
+
+LANGUAGE: Respond ONLY in English. Every word of your output must be English.
+Do not use Chinese, Thai, or any other language under any circumstances, even
+if it seems contextually relevant. This is a strict requirement, not a preference.
+
 RULES:
-- Always respond in English only.
-- Use tool calls to fetch real data. Never write JSON tool calls as markdown text.
+- Use tool calls to fetch real data. Never write JSON tool calls as markdown text -
+  if you need to call a tool, use a proper tool_call, not text describing one.
 - Call at most 3 tools per response, then summarize findings in plain English.
-- After fetching data with tools, write your final answer as plain text - do not call more tools.
+- After fetching data with tools, write your final answer as plain English text - do not call more tools.
 - Use sensible defaults: namespace=all, lines=50.
 - Be direct and technical. Format tables as plain text. Highlight unhealthy items.
-- You are talking to Grisho, a senior DevOps/Platform Engineer."""
+- You are talking to Grisho, a senior DevOps/Platform Engineer.
+
+Remember: English only, always."""
 
 
 
@@ -855,11 +862,13 @@ def webhook_alert():
         processed += 1
 
         try:
+            target_desc = f"pod {pod} in namespace {namespace}" if pod else f"namespace {namespace}" if namespace else "the cluster"
             investigation_prompt = (
-                f"An alert just fired: {alertname}. "
-                f"Summary: {summary}. Description: {description}. "
-                f"Namespace: {namespace or 'unknown'}, Pod: {pod or 'unknown'}. "
-                f"Investigate the root cause using available tools and give a concise diagnosis."
+                f"A monitoring alert called '{alertname}' just fired for {target_desc}. "
+                f"Here is what triggered it: {summary or description}. "
+                f"Please investigate {target_desc} using your tools and explain in plain English "
+                f"what is actually happening and what the likely root cause is. "
+                f"Respond only in English."
             )
             diagnosis, tools_used = run_agent(investigation_prompt, [])
             update_alert_diagnosis(alert_id, diagnosis, tools_used)
