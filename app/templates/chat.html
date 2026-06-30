@@ -584,6 +584,42 @@
   .alerts-empty::before { content: '\2014 '; }
   .alerts-empty::after { content: ' \2014'; }
 
+  .alert-dismiss-btn {
+    background: none;
+    border: 1px solid var(--red-dark);
+    color: var(--red-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    margin-top: 7px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+
+  .alert-dismiss-btn:hover {
+    color: var(--red-bright);
+    border-color: var(--red-bright);
+  }
+
+  .alert-card.resolved .alert-dismiss-btn,
+  .alert-card.dismissed .alert-dismiss-btn {
+    display: none;
+  }
+
+  .alert-card.dismissed {
+    border-color: var(--red-dark);
+    background: rgba(255, 0, 51, 0.01);
+    opacity: 0.4;
+  }
+
+  .alert-card.dismissed .alert-name::after {
+    content: ' [DISMISSED]';
+    font-size: 8px;
+    opacity: 0.7;
+  }
+
   @keyframes alertPulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,51,0.5); }
     50% { box-shadow: 0 0 0 5px rgba(255,0,51,0); }
@@ -977,13 +1013,18 @@ function renderAlerts(alerts) {
   list.innerHTML = "";
   alerts.forEach(a => {
     const card = document.createElement("div");
-    card.className = "alert-card" + (a.status === "resolved" ? " resolved" : "");
+    const statusClass = a.status === "resolved" ? " resolved" : (a.status === "dismissed" ? " dismissed" : "");
+    card.className = "alert-card" + statusClass;
     const target = [a.namespace, a.pod].filter(Boolean).join(" / ") || "cluster-wide";
     let diagnosisHtml = "";
     if (a.diagnosis) {
       diagnosisHtml = `<div class="alert-diagnosis">${escapeHtmlAlert(a.diagnosis)}</div>`;
     } else if (a.status === "firing") {
       diagnosisHtml = `<div class="alert-pending">investigating...</div>`;
+    }
+    let dismissBtnHtml = "";
+    if (a.status === "firing") {
+      dismissBtnHtml = `<button class="alert-dismiss-btn" onclick="dismissAlert(${a.id})">✕ dismiss</button>`;
     }
     card.innerHTML = `
       <div class="alert-card-header">
@@ -993,9 +1034,18 @@ function renderAlerts(alerts) {
       <div class="alert-target">${escapeHtmlAlert(target)}</div>
       <div class="alert-summary">${escapeHtmlAlert(a.summary || a.description || "")}</div>
       ${diagnosisHtml}
+      ${dismissBtnHtml}
     `;
     list.appendChild(card);
   });
+}
+
+async function dismissAlert(alertId) {
+  try {
+    await fetch(`/alerts/${alertId}/dismiss`, { method: "POST" });
+    pollAlerts();
+  } catch (err) {
+  }
 }
 async function pollAlerts() {
   try {

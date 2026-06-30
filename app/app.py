@@ -876,6 +876,28 @@ def alerts_page_api():
     return jsonify(load_alerts(limit=30))
 
 
+def dismiss_alert(alert_id: int):
+    """Manually dismiss an alert from the UI - does not touch Prometheus or
+    Alertmanager, purely a local UI-side acknowledgement. If the underlying
+    condition is still true, Prometheus may still fire a fresh alert on its
+    next evaluation cycle (this is intentional - dismiss != silence)."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE alerts SET status = 'dismissed', resolved_at = ? WHERE id = ?",
+        (datetime.now().timestamp(), alert_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+@app.route('/alerts/<int:alert_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_alert_api(alert_id):
+    """Mark a specific alert as dismissed by the logged-in user."""
+    dismiss_alert(alert_id)
+    return jsonify({"ok": True, "id": alert_id})
+
+
 
 
 
