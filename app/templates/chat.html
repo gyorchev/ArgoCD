@@ -584,6 +584,42 @@
   .alerts-empty::before { content: '\2014 '; }
   .alerts-empty::after { content: ' \2014'; }
 
+  .alerts-toggle-btn {
+    position: absolute;
+    top: 50%;
+    left: -22px;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 50px;
+    background: var(--red-faint);
+    border: 1px solid var(--red-bright);
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    color: var(--red-bright);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'Share Tech Mono', monospace;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .alerts-toggle-btn:hover {
+    background: rgba(255, 0, 51, 0.15);
+  }
+
+  .alerts-panel.collapsed {
+    width: 22px;
+    min-width: 22px;
+  }
+
+  .alerts-panel.collapsed .alerts-content {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .alert-dismiss-btn {
     background: none;
     border: 1px solid var(--red-dark);
@@ -750,6 +786,7 @@ What would you like to know about your cluster?</div>
             <span class="alert-count zero" id="alert-count">0</span>
           </div>
         </div>
+        <button id="alerts-toggle-btn" class="alerts-toggle-btn" onclick="toggleAlertsPanel()">&gt;</button>
         <div class="alerts-scroll" id="alerts-list">
           <div class="alerts-empty">no alerts // cluster quiet</div>
         </div>
@@ -1000,16 +1037,32 @@ function fmtAlertTime(ts) {
 function escapeHtmlAlert(s) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+let lastAlertsSignature = "";
+let alertsPanelCollapsed = false;
+
+function alertsSignature(alerts) {
+  return alerts.map(a => `${a.id}:${a.status}:${a.diagnosis ? a.diagnosis.length : 0}`).join("|");
+}
+
 function renderAlerts(alerts) {
-  const list = document.getElementById("alerts-list");
   const countEl = document.getElementById("alert-count");
   const firing = alerts.filter(a => a.status === "firing");
   countEl.textContent = firing.length;
   countEl.className = firing.length > 0 ? "alert-count pulse" : "alert-count zero";
+
+  const sig = alertsSignature(alerts);
+  if (sig === lastAlertsSignature) {
+    return;
+  }
+  lastAlertsSignature = sig;
+
+  const list = document.getElementById("alerts-list");
+
   if (alerts.length === 0) {
     list.innerHTML = "<div class=\"alerts-empty\">no alerts // cluster quiet</div>";
     return;
   }
+
   list.innerHTML = "";
   alerts.forEach(a => {
     const card = document.createElement("div");
@@ -1024,7 +1077,7 @@ function renderAlerts(alerts) {
     }
     let dismissBtnHtml = "";
     if (a.status === "firing") {
-      dismissBtnHtml = `<button class="alert-dismiss-btn" onclick="dismissAlert(${a.id})">✕ dismiss</button>`;
+      dismissBtnHtml = `<button class="alert-dismiss-btn" onclick="dismissAlert(${a.id})">DISMISS</button>`;
     }
     card.innerHTML = `
       <div class="alert-card-header">
@@ -1043,11 +1096,29 @@ function renderAlerts(alerts) {
 async function dismissAlert(alertId) {
   try {
     await fetch(`/alerts/${alertId}/dismiss`, { method: "POST" });
+    lastAlertsSignature = "";
     pollAlerts();
   } catch (err) {
   }
 }
+
+function toggleAlertsPanel() {
+  alertsPanelCollapsed = !alertsPanelCollapsed;
+  const panel = document.querySelector(".alerts-panel");
+  const toggleBtn = document.getElementById("alerts-toggle-btn");
+  if (alertsPanelCollapsed) {
+    panel.classList.add("collapsed");
+    toggleBtn.textContent = "<";
+  } else {
+    panel.classList.remove("collapsed");
+    toggleBtn.textContent = ">";
+    lastAlertsSignature = "";
+    pollAlerts();
+  }
+}
+
 async function pollAlerts() {
+  if (alertsPanelCollapsed) return;
   try {
     const res = await fetch("/alerts");
     const alerts = await res.json();
